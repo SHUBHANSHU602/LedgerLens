@@ -14,15 +14,19 @@ Financial reconciliation is a critical accounting process where internal sales/o
 ---
 
 ## Solution
-LedgerLens solves financial reconciliation through a multi-tier pipeline:
-1. **Deterministic Multi-Factor Core**: Evaluates candidate matches using weighted evidence (Reference 40%, Amount 30%, Date 20%, Customer Text 10%).
-2. **Bounded Groq AI Assistance**: Invokes Groq LLM (`groq/compound`) **only** when deterministic rules identify genuine ambiguity.
-3. **Pydantic & Safety Vetoes**: Enforces strict candidate pool boundaries, hallucinated bank ID vetoes, currency mismatch checks, and global one-to-one conflict resolution.
-4. **Observable REST API & Web UI**: Offers structured JSON debug traces and a thin Streamlit web interface for accountants and developers.
+LedgerLens solves financial reconciliation through a 10-step **Bounded Financial Reconciliation Agent Loop**:
+1. **Perception & Ingestion**: Ingests internal ledgers, Razorpay settlement exports, and bank statements.
+2. **Normalization & Schema Validation**: Converts amounts to numeric floats, normalizes dates to ISO, and strips text noise.
+3. **Multi-Tier Deterministic Engine**: Matches exact references and unique amount/date candidates (73%+ of records).
+4. **Exception Investigator**: Dispatches AI/rule-based investigation to analyze discrepancies (fees, date shifts, conflicts).
+5. **Deterministic Policy Engine**: Enforces strict financial tolerances (e.g., ₹100 max fee auto-adjustment) and risk tiers.
+6. **Action Handlers & Verification**: Idempotently executes low-risk actions and runs a post-execution outcome verification loop.
+7. **Human-in-the-Loop Approval**: Escalates high-risk or ambiguous cases (`ACTION_PENDING_APPROVAL`) for human sign-off.
+8. **Append-Only Audit Trail**: Logged immutable audit events (`AuditEvent`) capturing full state transition histories.
 
 ---
 
-## Architecture
+## Bounded Agent Workflow Loop
 
 ```mermaid
 graph TD
@@ -42,17 +46,26 @@ graph TD
     K -- "Outcome Verified" --> L[10. APPEND-ONLY AUDIT LOG & State Update]
 ```
 
-
-
 ---
 
-## How It Works
-1. **Normalization**: Amounts are converted to clean numeric floats; dates are parsed to ISO format; narrations are uppercased and stripped of special noise characters.
-2. **Tier 1 (Exact Ref)**: If the bank narration contains the exact order ID within the date window and matching currency, it is auto-matched immediately.
-3. **Tier 2 (Exact Amount/Date)**: Unique amount/date matches without reference contradictions are auto-matched.
-4. **Tier 3 (Candidate Scoring)**: Broad candidate pools are evaluated across multi-weighted evidence factors.
-5. **Tier 4 (Unmatched Bank)**: Unclaimed bank statement records are logged as `UNMATCHED` for audit inspection.
-6. **Global One-to-One Conflict Resolution**: If two ledger records claim the same bank record, the higher confidence score retains `MATCHED`, and the lower claim is downgraded to `REVIEW`.
+## Core Agent Components
+
+### 1. Stateful Case Machine (`src/agent/models.py`)
+Manages reconciliation cases through explicit deterministic states: `NEW` → `INGESTING` → `NORMALIZING` → `RECONCILING` → `INVESTIGATING` → `RECOMMENDATION_READY` → `POLICY_APPROVED` → `ACTION_EXECUTING` → `ACTION_VERIFYING` → `RESOLVED`.
+
+### 2. Exception Investigator (`src/agent/investigator.py`)
+Analyzes transaction exceptions (`FEE_ADJUSTMENT`, `DATE_MISMATCH`, `ONE_TO_ONE_CONFLICT`, `CURRENCY_MISMATCH`) and produces structured, typed recommendations.
+
+### 3. Deterministic Policy Engine (`src/agent/policy.py`)
+Enforces strict financial boundaries:
+- **Fee Adjustment Tolerance**: Auto-adjustment allowed **only** if fee variance $\le ₹100.0$.
+- **Auto-Match Threshold**: Auto-approval allowed **only** if confidence score $\ge 0.82$.
+- **Prompt Injection Defense**: Sanitizes transaction remarks (`[REDACTED_TEXT]`) to prevent malicious text from altering agent rules.
+- **Risk Tiers**: Automatically assigns `LOW`, `MEDIUM`, or `HIGH` risk tiers.
+
+### 4. Action Handlers & Outcome Verification (`src/agent/actions.py`)
+Bounded actions (`MARK_RECONCILED`, `CREATE_FEE_ADJUSTMENT`, `FLAG_FOR_REVIEW`, `MARK_UNMATCHED`) run through post-execution verification checks and idempotency guards (`case_id:action_type` lookup).
+
 
 ---
 
