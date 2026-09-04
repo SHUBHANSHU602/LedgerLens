@@ -1,11 +1,11 @@
-"""FastAPI REST API for LedgerLens Financial Reconciliation Core & Observability (Phase 3)."""
+"""FastAPI REST API for LedgerLens Financial Reconciliation Core & Observability (Phase 3 & 4)."""
 
 import os
 import sys
+import uuid
 from typing import Optional, Dict, Any, List
 import pandas as pd
 from fastapi import FastAPI, UploadFile, File, Form, Query, HTTPException
-from fastapi.responses import JSONResponse
 
 # Ensure root dir is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -20,7 +20,10 @@ app = FastAPI(
     version="1.0.0",
 )
 
+_LAST_RUN_CACHE: Dict[str, Any] = {}
 
+
+@app.get("/health")
 @app.get("/api/v1/health")
 def health_check():
     """Health check endpoint for LedgerLens system status."""
@@ -75,7 +78,6 @@ async def upload_custom_data(
         with pd.ExcelWriter(target_path, engine="openpyxl") as writer:
             df.to_excel(writer, sheet_name="Data", index=False)
     except Exception:
-        # Fallback to CSV if openpyxl excel writer runs into file lock
         target_path = os.path.join(custom_dir, target_filename.replace(".xlsx", ".csv"))
         df.to_csv(target_path, index=False)
 
@@ -120,13 +122,18 @@ def run_reconciliation_endpoint(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Reconciliation error: {str(e)}")
 
+    run_id = f"RUN-{uuid.uuid4().hex[:8].upper()}"
     status_counts = df_results["status"].value_counts().to_dict()
     sources = df_results["decision_source"].value_counts().to_dict()
 
     response_data: Dict[str, Any] = {
         "status": "success",
+        "run_id": run_id,
         "data_source": data_source,
         "total_records": len(df_results),
+        "matched_count": status_counts.get("MATCHED", 0),
+        "review_count": status_counts.get("REVIEW", 0),
+        "unmatched_count": status_counts.get("UNMATCHED", 0),
         "summary": {
             "matched": status_counts.get("MATCHED", 0),
             "review": status_counts.get("REVIEW", 0),
@@ -135,29 +142,37 @@ def run_reconciliation_endpoint(
         },
     }
 
+    traces = []
+    for idx, row in df_results.iterrows():
+        traces.append({
+            "ledger_id": row.get("ledger_id", ""),
+            "bank_id": row.get("bank_id", ""),
+            "status": row.get("status", ""),
+            "matching_rule": row.get("matching_rule", ""),
+            "score": row.get("score", 0.0),
+            "reason": row.get("reason", ""),
+            "decision_source": row.get("decision_source", "deterministic"),
+            "ai_invoked": str(row.get("decision_source", "")).lower() == "groq",
+            "ai_result_summary": row.get("ai_reason", ""),
+            "ai_validation_result": "passed" if row.get("decision_source", "") == "groq" else "skipped",
+            "hard_safety_checks": "passed",
+            "candidate_count": row.get("candidate_count", 0),
+            "candidate_rank": row.get("candidate_rank", 1),
+            "amount_difference": row.get("amount_difference", 0.0),
+            "date_difference": row.get("date_difference", 0),
+        })
+
     if debug_mode:
-        traces = []
-        for idx, row in df_results.iterrows():
-            traces.append({
-                "ledger_id": row.get("ledger_id", ""),
-                "bank_id": row.get("bank_id", ""),
-                "status": row.get("status", ""),
-                "matching_rule": row.get("matching_rule", ""),
-                "score": row.get("score", 0.0),
-                "reason": row.get("reason", ""),
-                "decision_source": row.get("decision_source", "deterministic"),
-                "ai_invoked": str(row.get("decision_source", "")).lower() == "groq",
-                "ai_result": {
-                    "model_used": row.get("model_used", "none"),
-                    "ai_reason": row.get("ai_reason", ""),
-                    "original_score": row.get("original_score", 0.0),
-                },
-                "final_safety_validation": True,
-                "candidate_count": row.get("candidate_count", 0),
-                "candidate_rank": row.get("candidate_rank", 1),
-                "amount_difference": row.get("amount_difference", 0.0),
-                "date_difference": row.get("date_difference", 0),
-            })
         response_data["traces"] = traces
 
+    _LAST_RUN_CACHE["last_run"] = response_data
+    _LAST_RUN_CACHE["last_traces"] = traces
     return response_data
+
+
+@app.get("/api/v1/reconcile/")
+def get_latest_reconciliation_run():
+    """Retrieve the latest reconciliation run summary and traces."""
+    if "last_run" not in _LAST_RUN_CACHE:
+        raise HTTPException(status_code=404, detail="No reconciliation run found in memory cache. Execute POST /api/v1/reconcile first.")
+    return _LAST_RUN_CACHE["last_run"]

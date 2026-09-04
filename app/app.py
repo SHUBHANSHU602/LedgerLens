@@ -150,7 +150,7 @@ if "reconciled_results" in st.session_state:
     kpi2.metric("Matched", matched_cnt, f"{matched_cnt/total_rows*100:.1f}%")
     kpi3.metric("Review Required", review_cnt, f"{review_cnt/total_rows*100:.1f}%")
     kpi4.metric("Unmatched", unmatched_cnt, f"{unmatched_cnt/total_rows*100:.1f}%")
-    kpi5.metric("AI Calls Made", ai_calls_cnt, "REVIEW Pool Only")
+    kpi5.metric("AI-Assisted Decisions", ai_calls_cnt, "REVIEW Pool Only")
     kpi6.metric("False Positives", fp_cnt, "0.0% Risk Target")
 
     if eval_m:

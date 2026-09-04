@@ -35,10 +35,14 @@ def mock_ai_matcher():
 
 
 def test_api_health():
-    """Test health check endpoint."""
-    response = client.get("/api/v1/health")
-    assert response.status_code == 200
-    data = response.json()
+    """Test health check endpoints."""
+    res1 = client.get("/health")
+    assert res1.status_code == 200
+    assert res1.json()["status"] == "ok"
+
+    res2 = client.get("/api/v1/health")
+    assert res2.status_code == 200
+    data = res2.json()
     assert data["status"] == "ok"
     assert "version" in data
     assert "custom_data_dir" in data
@@ -103,8 +107,9 @@ def test_reconcile_endpoint():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "success"
+    assert "run_id" in data
     assert "summary" in data
-    assert "total_records" in data
+    assert "matched_count" in data
 
 
 def test_reconcile_endpoint_debug_mode():
@@ -120,8 +125,18 @@ def test_reconcile_endpoint_debug_mode():
     assert "ledger_id" in trace
     assert "matching_rule" in trace
     assert "ai_invoked" in trace
-    assert "ai_result" in trace
-    assert "final_safety_validation" in trace
+    assert "ai_result_summary" in trace
+    assert "hard_safety_checks" in trace
+
+
+def test_get_latest_reconciliation():
+    """Test GET /api/v1/reconcile/ retrieving latest run summary."""
+    client.post("/api/v1/reconcile?debug=true")
+    response = client.get("/api/v1/reconcile/")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert "run_id" in data
 
 
 def test_answer_key_isolation_in_api():

@@ -1,4 +1,4 @@
-"""Deterministic & Evidence-based Financial Reconciliation Engine (Phase 2 & 3)."""
+"""Deterministic & Evidence-based Financial Reconciliation Engine (Phase 2 & 3 & 4)."""
 
 from typing import Dict, Any, List, Optional, Tuple
 import pandas as pd
@@ -109,7 +109,7 @@ def reconcile(
     bank["extracted_ref"] = bank["norm_narration"].apply(extract_reference)
 
     matched_results: List[Dict[str, Any]] = []
-    assigned_ledger, assigned_bank = set(), set()
+    finalized_ledger, assigned_bank = set(), set()
 
     def add_result(
         l_id: str, b_id: str, status: str, rule: str, score: float, reason: str,
@@ -117,6 +117,10 @@ def reconcile(
         orig_score: Optional[float] = None, amt_diff: float = 0.0, date_diff: int = 0,
         rank: int = 1, count: int = 1
     ):
+        # If ledger was previously marked UNRESOLVED in an earlier tier, replace it
+        if l_id:
+            matched_results[:] = [r for r in matched_results if not (r["ledger_id"] == l_id and r["status"] == "UNRESOLVED")]
+
         rec = ReconciliationRecord(
             ledger_id=l_id, bank_id=b_id, status=status, matching_rule=rule,
             score=score, reason=reason, decision_source=source, model_used=model,
@@ -125,8 +129,10 @@ def reconcile(
             candidate_rank=rank, candidate_count=count,
         )
         matched_results.append(rec.to_dict())
-        if l_id:
-            assigned_ledger.add(l_id)
+
+        # Invariant: Only finalize ledger when reaching a definitive state
+        if l_id and status in ("MATCHED", "REVIEW", "UNMATCHED"):
+            finalized_ledger.add(l_id)
         if b_id and status == "MATCHED":
             assigned_bank.add(b_id)
 
@@ -142,12 +148,13 @@ def reconcile(
             b_id, b_amt, b_date, b_curr = b_row["utr_reference"], b_row["norm_amount"], b_row["norm_date"], b_row["norm_curr"]
             amt_diff, date_diff = abs(l_amt - b_amt), abs((l_date - b_date).days)
             if l_curr != b_curr:
+                # Intermediate failure: do NOT finalize ledger so later tiers can evaluate candidate scoring
                 add_result(l_id, b_id, "UNRESOLVED", "CURRENCY_MISMATCH", 0.0, f"Currency mismatch ({l_curr} vs {b_curr})", amt_diff=amt_diff, date_diff=date_diff)
             elif amt_diff <= config.AMOUNT_TOLERANCE and date_diff <= config.DATE_WINDOW_DAYS:
                 add_result(l_id, b_id, "MATCHED", "EXACT_REFERENCE", 1.0, "Exact reference, amount, and date match", amt_diff=amt_diff, date_diff=date_diff)
 
     # Tier 2: Exact Amount + Date Unique Match
-    for l_idx, l_row in ledger[~ledger["order_id"].isin(assigned_ledger)].iterrows():
+    for l_idx, l_row in ledger[~ledger["order_id"].isin(finalized_ledger)].iterrows():
         l_id, l_amt, l_date, l_curr = l_row["order_id"], l_row["norm_amount"], l_row["norm_date"], l_row["norm_curr"]
         candidates = bank[
             (~bank["utr_reference"].isin(assigned_bank)) &
@@ -161,7 +168,7 @@ def reconcile(
             add_result(l_id, b_row["utr_reference"], "MATCHED", "EXACT_AMOUNT_DATE", 0.9, "Exact amount and date match", amt_diff=0.0, date_diff=0)
 
     # Tier 3: Phase 3 Candidate Generation & Bounded AI Assistance
-    unassigned = ledger[~ledger["order_id"].isin(assigned_ledger)]
+    unassigned = ledger[~ledger["order_id"].isin(finalized_ledger)]
     for l_idx, l_row in unassigned.iterrows():
         l_id, l_curr, l_date, l_amt = l_row["order_id"], l_row["norm_curr"], l_row["norm_date"], l_row["norm_amount"]
         candidate_pool = []
@@ -219,7 +226,6 @@ def reconcile(
     # -------------------------------------------------------------------------
     # Global One-To-One Conflict Resolution
     # -------------------------------------------------------------------------
-    # Check for duplicate MATCHED bank assignments across ledger records
     confirmed_bank_map: Dict[str, Tuple[int, float]] = {}  # bank_id -> (result_index, score)
     conflicted_indices = set()
 

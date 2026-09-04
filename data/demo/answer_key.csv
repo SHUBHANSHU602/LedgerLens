@@ -1,0 +1,10 @@
+order_id,utr_reference,scenario,expected_status,notes
+ORD-2001,UTR7001,EASY_EXACT,MATCHED,Exact reference amount date match
+ORD-2002,UTR7002,FEE_DIFFERENCE,UNRESOLVED,Net amount minus 50 INR fee
+ORD-2003,UTR7003,DATE_SHIFT,MATCHED,2-day settlement delay
+ORD-2004,UTR7004A,AMBIGUOUS,UNRESOLVED,Two identical 999 INR decoy candidates
+ORD-2005,,UNMATCHED_LEDGER,UNMATCHED,No bank record present
+ORD-2006,UTR7006,FALSE_POSITIVE_TRAP,MATCHED,True order matched avoiding UTR7006_TRAP
+ORD-2007,,UNMATCHED_LEDGER,UNMATCHED,Unmatched order
+ORD-2008,,UNMATCHED_LEDGER,UNMATCHED,Unmatched order
+,UTR7009,UNMATCHED_BANK,UNMATCHED,Unmatched bank credit
