@@ -1,101 +1,236 @@
 order_id,utr_reference,scenario,expected_status,notes
-ORD-1001,UTR500001,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1002,UTR500002,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1003,UTR500003,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1004,UTR500004,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1005,UTR500005,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1006,UTR500006,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1007,UTR500007,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1008,UTR500008,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1009,UTR500009,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1010,UTR500010,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1011,UTR500011,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1012,UTR500012,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1013,UTR500013,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1014,UTR500014,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1015,UTR500015,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1016,UTR500016,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1017,UTR500017,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1018,UTR500018,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1019,UTR500019,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1020,UTR500020,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1021,UTR500021,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1022,UTR500022,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1023,UTR500023,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1024,UTR500024,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1025,UTR500025,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1026,UTR500026,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1027,UTR500027,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1028,UTR500028,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1029,UTR500029,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1030,UTR500030,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1031,UTR500031,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1032,UTR500032,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1033,UTR500033,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1034,UTR500034,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1035,UTR500035,exact_match,MATCHED,"Exact reference, amount, and date match"
-ORD-1036,UTR500036,fee_difference,UNRESOLVED,Amount mismatch due to bank deduction fee
-ORD-1037,UTR500037,fee_difference,UNRESOLVED,Amount mismatch due to bank deduction fee
-ORD-1038,UTR500038,fee_difference,UNRESOLVED,Amount mismatch due to bank deduction fee
-ORD-1039,UTR500039,fee_difference,UNRESOLVED,Amount mismatch due to bank deduction fee
-ORD-1040,UTR500040,fee_difference,UNRESOLVED,Amount mismatch due to bank deduction fee
-ORD-1041,UTR500041,fee_difference,UNRESOLVED,Amount mismatch due to bank deduction fee
-ORD-1042,UTR500042,fee_difference,UNRESOLVED,Amount mismatch due to bank deduction fee
-ORD-1043,UTR500043,fee_difference,UNRESOLVED,Amount mismatch due to bank deduction fee
-ORD-1044,UTR500044,fee_difference,UNRESOLVED,Amount mismatch due to bank deduction fee
-ORD-1045,UTR500045,fee_difference,UNRESOLVED,Amount mismatch due to bank deduction fee
-ORD-1046,UTR500046,settlement_date_delay,MATCHED,Match within date window delay
-ORD-1047,UTR500047,settlement_date_delay,MATCHED,Match within date window delay
-ORD-1048,UTR500048,settlement_date_delay,MATCHED,Match within date window delay
-ORD-1049,UTR500049,settlement_date_delay,MATCHED,Match within date window delay
-ORD-1050,UTR500050,settlement_date_delay,MATCHED,Match within date window delay
-ORD-1051,UTR500051,settlement_date_delay,MATCHED,Match within date window delay
-ORD-1052,UTR500052,settlement_date_delay,MATCHED,Match within date window delay
-ORD-1053,UTR500053,settlement_date_delay,MATCHED,Match within date window delay
-ORD-1054,UTR500054,settlement_date_delay,MATCHED,Match within date window delay
-ORD-1055,UTR500055,settlement_date_delay,MATCHED,Match within date window delay
-ORD-1056,UTR500056,noisy_reference,MATCHED,Reference extracted from noisy narration
-ORD-1057,UTR500057,noisy_reference,MATCHED,Reference extracted from noisy narration
-ORD-1058,UTR500058,noisy_reference,MATCHED,Reference extracted from noisy narration
-ORD-1059,UTR500059,noisy_reference,MATCHED,Reference extracted from noisy narration
-ORD-1060,UTR500060,noisy_reference,MATCHED,Reference extracted from noisy narration
-ORD-1061,UTR500061,noisy_reference,MATCHED,Reference extracted from noisy narration
-ORD-1062,UTR500062,noisy_reference,MATCHED,Reference extracted from noisy narration
-ORD-1063,UTR500063,noisy_reference,MATCHED,Reference extracted from noisy narration
-ORD-1064,UTR500064,noisy_reference,MATCHED,Reference extracted from noisy narration
-ORD-1065,UTR500065,noisy_reference,MATCHED,Reference extracted from noisy narration
-ORD-1066,UTR500066,typo,UNRESOLVED,Reference typo prevents exact reference match
-ORD-1067,UTR500067,typo,UNRESOLVED,Reference typo prevents exact reference match
-ORD-1068,UTR500068,typo,UNRESOLVED,Reference typo prevents exact reference match
-ORD-1069,UTR500069,typo,UNRESOLVED,Reference typo prevents exact reference match
-ORD-1070,UTR500070,typo,UNRESOLVED,Reference typo prevents exact reference match
-ORD-1071,,true_unmatched_ledger,UNMATCHED,No bank statement record present
-ORD-1072,,true_unmatched_ledger,UNMATCHED,No bank statement record present
-ORD-1073,,true_unmatched_ledger,UNMATCHED,No bank statement record present
-ORD-1074,,true_unmatched_ledger,UNMATCHED,No bank statement record present
-ORD-1075,,true_unmatched_ledger,UNMATCHED,No bank statement record present
-ORD-1076,,true_unmatched_ledger,UNMATCHED,No bank statement record present
-ORD-1077,,true_unmatched_ledger,UNMATCHED,No bank statement record present
-ORD-1078,,true_unmatched_ledger,UNMATCHED,No bank statement record present
-ORD-1079,,true_unmatched_ledger,UNMATCHED,No bank statement record present
-ORD-1080,,true_unmatched_ledger,UNMATCHED,No bank statement record present
-,UTR500071,true_unmatched_bank,UNMATCHED,No ledger record present
-,UTR500072,true_unmatched_bank,UNMATCHED,No ledger record present
-,UTR500073,true_unmatched_bank,UNMATCHED,No ledger record present
-,UTR500074,true_unmatched_bank,UNMATCHED,No ledger record present
-,UTR500075,true_unmatched_bank,UNMATCHED,No ledger record present
-,UTR500076,true_unmatched_bank,UNMATCHED,No ledger record present
-,UTR500077,true_unmatched_bank,UNMATCHED,No ledger record present
-,UTR500078,true_unmatched_bank,UNMATCHED,No ledger record present
-,UTR500079,true_unmatched_bank,UNMATCHED,No ledger record present
-,UTR500080,true_unmatched_bank,UNMATCHED,No ledger record present
-ORD-1081,UTR500081,near_duplicate_decoys,UNRESOLVED,Ambiguous amount/date decoy match
-ORD-1082,UTR500082,near_duplicate_decoys,UNRESOLVED,Ambiguous amount/date decoy match
-ORD-1083,UTR500083,near_duplicate_decoys,UNRESOLVED,Ambiguous amount/date decoy match
-ORD-1084,UTR500084,near_duplicate_decoys,UNRESOLVED,Ambiguous amount/date decoy match
-ORD-1085,UTR500085,near_duplicate_decoys,UNRESOLVED,Ambiguous amount/date decoy match
-ORD-1086,UTR500086,near_duplicate_decoys,UNRESOLVED,Ambiguous amount/date decoy match
-ORD-1087,UTR500087,batch_aggregate,UNRESOLVED,Aggregated batch payment
-ORD-1088,UTR500087,batch_aggregate,UNRESOLVED,Aggregated batch payment
-ORD-1089,UTR500088,batch_aggregate,UNRESOLVED,Aggregated batch payment
-ORD-1090,UTR500088,batch_aggregate,UNRESOLVED,Aggregated batch payment
+ORD-1001,UTR500001,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1002,UTR500002,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1003,UTR500003,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1004,UTR500004,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1005,UTR500005,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1006,UTR500006,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1007,UTR500007,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1008,UTR500008,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1009,UTR500009,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1010,UTR500010,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1011,UTR500011,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1012,UTR500012,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1013,UTR500013,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1014,UTR500014,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1015,UTR500015,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1016,UTR500016,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1017,UTR500017,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1018,UTR500018,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1019,UTR500019,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1020,UTR500020,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1021,UTR500021,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1022,UTR500022,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1023,UTR500023,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1024,UTR500024,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1025,UTR500025,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1026,UTR500026,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1027,UTR500027,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1028,UTR500028,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1029,UTR500029,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1030,UTR500030,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1031,UTR500031,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1032,UTR500032,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1033,UTR500033,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1034,UTR500034,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1035,UTR500035,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1036,UTR500036,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1037,UTR500037,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1038,UTR500038,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1039,UTR500039,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1040,UTR500040,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1041,UTR500041,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1042,UTR500042,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1043,UTR500043,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1044,UTR500044,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1045,UTR500045,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1046,UTR500046,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1047,UTR500047,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1048,UTR500048,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1049,UTR500049,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1050,UTR500050,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1051,UTR500051,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1052,UTR500052,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1053,UTR500053,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1054,UTR500054,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1055,UTR500055,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1056,UTR500056,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1057,UTR500057,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1058,UTR500058,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1059,UTR500059,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1060,UTR500060,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1061,UTR500061,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1062,UTR500062,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1063,UTR500063,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1064,UTR500064,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1065,UTR500065,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1066,UTR500066,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1067,UTR500067,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1068,UTR500068,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1069,UTR500069,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1070,UTR500070,EASY_EXACT,MATCHED,"Exact reference, amount, and date match"
+ORD-1071,UTR500071,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (ORD / 1071)
+ORD-1072,UTR500072,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (ORD01072)
+ORD-1073,UTR500073,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (PG_SETTL_TXN_1073_RECV)
+ORD-1074,UTR500074,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (PAYMENT FROM ZETA LOGISTICS)
+ORD-1075,UTR500075,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (ORD / 1075)
+ORD-1076,UTR500076,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (ORD01076)
+ORD-1077,UTR500077,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (PG_SETTL_TXN_1077_RECV)
+ORD-1078,UTR500078,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (PAYMENT FROM ZETA LOGISTICS)
+ORD-1079,UTR500079,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (ORD / 1079)
+ORD-1080,UTR500080,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (ORD01080)
+ORD-1081,UTR500081,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (PG_SETTL_TXN_1081_RECV)
+ORD-1082,UTR500082,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (PAYMENT FROM ETA SYSTEMS)
+ORD-1083,UTR500083,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (ORD / 1083)
+ORD-1084,UTR500084,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (ORD01084)
+ORD-1085,UTR500085,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (PG_SETTL_TXN_1085_RECV)
+ORD-1086,UTR500086,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (PAYMENT FROM ZETA LOGISTICS)
+ORD-1087,UTR500087,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (ORD / 1087)
+ORD-1088,UTR500088,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (ORD01088)
+ORD-1089,UTR500089,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (PG_SETTL_TXN_1089_RECV)
+ORD-1090,UTR500090,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (PAYMENT FROM BETA TRADERS)
+ORD-1091,UTR500091,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (ORD / 1091)
+ORD-1092,UTR500092,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (ORD01092)
+ORD-1093,UTR500093,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (PG_SETTL_TXN_1093_RECV)
+ORD-1094,UTR500094,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (PAYMENT FROM ACME CORP)
+ORD-1095,UTR500095,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (ORD / 1095)
+ORD-1096,UTR500096,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (ORD01096)
+ORD-1097,UTR500097,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (PG_SETTL_TXN_1097_RECV)
+ORD-1098,UTR500098,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (PAYMENT FROM ACME CORP)
+ORD-1099,UTR500099,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (ORD / 1099)
+ORD-1100,UTR500100,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (ORD01100)
+ORD-1101,UTR500101,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (PG_SETTL_TXN_1101_RECV)
+ORD-1102,UTR500102,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (PAYMENT FROM ETA SYSTEMS)
+ORD-1103,UTR500103,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (ORD / 1103)
+ORD-1104,UTR500104,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (ORD01104)
+ORD-1105,UTR500105,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (PG_SETTL_TXN_1105_RECV)
+ORD-1106,UTR500106,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (PAYMENT FROM IOTA DIGITAL)
+ORD-1107,UTR500107,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (ORD / 1107)
+ORD-1108,UTR500108,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (ORD01108)
+ORD-1109,UTR500109,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (PG_SETTL_TXN_1109_RECV)
+ORD-1110,UTR500110,NOISY_REFERENCE,MATCHED,Noisy narration reference mutation (PAYMENT FROM IOTA DIGITAL)
+ORD-1111,UTR500111,FEE_DIFFERENCE,UNRESOLVED,Bank amount reduced by fee 49.06 INR
+ORD-1112,UTR500112,FEE_DIFFERENCE,UNRESOLVED,Bank amount reduced by fee 15.21 INR
+ORD-1113,UTR500113,FEE_DIFFERENCE,UNRESOLVED,Bank amount reduced by fee 21.57 INR
+ORD-1114,UTR500114,FEE_DIFFERENCE,UNRESOLVED,Bank amount reduced by fee 42.02 INR
+ORD-1115,UTR500115,FEE_DIFFERENCE,UNRESOLVED,Bank amount reduced by fee 21.77 INR
+ORD-1116,UTR500116,FEE_DIFFERENCE,UNRESOLVED,Bank amount reduced by fee 23.03 INR
+ORD-1117,UTR500117,FEE_DIFFERENCE,UNRESOLVED,Bank amount reduced by fee 39.82 INR
+ORD-1118,UTR500118,FEE_DIFFERENCE,UNRESOLVED,Bank amount reduced by fee 12.82 INR
+ORD-1119,UTR500119,FEE_DIFFERENCE,UNRESOLVED,Bank amount reduced by fee 41.12 INR
+ORD-1120,UTR500120,FEE_DIFFERENCE,UNRESOLVED,Bank amount reduced by fee 49.32 INR
+ORD-1121,UTR500121,FEE_DIFFERENCE,UNRESOLVED,Bank amount reduced by fee 39.15 INR
+ORD-1122,UTR500122,FEE_DIFFERENCE,UNRESOLVED,Bank amount reduced by fee 17.36 INR
+ORD-1123,UTR500123,FEE_DIFFERENCE,UNRESOLVED,Bank amount reduced by fee 20.82 INR
+ORD-1124,UTR500124,FEE_DIFFERENCE,UNRESOLVED,Bank amount reduced by fee 20.19 INR
+ORD-1125,UTR500125,FEE_DIFFERENCE,UNRESOLVED,Bank amount reduced by fee 34.84 INR
+ORD-1126,UTR500126,FEE_DIFFERENCE,UNRESOLVED,Bank amount reduced by fee 14.78 INR
+ORD-1127,UTR500127,FEE_DIFFERENCE,UNRESOLVED,Bank amount reduced by fee 23.19 INR
+ORD-1128,UTR500128,FEE_DIFFERENCE,UNRESOLVED,Bank amount reduced by fee 10.21 INR
+ORD-1129,UTR500129,FEE_DIFFERENCE,UNRESOLVED,Bank amount reduced by fee 40.69 INR
+ORD-1130,UTR500130,FEE_DIFFERENCE,UNRESOLVED,Bank amount reduced by fee 45.8 INR
+ORD-1131,UTR500131,DATE_SHIFT,MATCHED,Settlement delayed by 2 days
+ORD-1132,UTR500132,DATE_SHIFT,MATCHED,Settlement delayed by 1 days
+ORD-1133,UTR500133,DATE_SHIFT,MATCHED,Settlement delayed by 1 days
+ORD-1134,UTR500134,DATE_SHIFT,MATCHED,Settlement delayed by 2 days
+ORD-1135,UTR500135,DATE_SHIFT,MATCHED,Settlement delayed by 1 days
+ORD-1136,UTR500136,DATE_SHIFT,MATCHED,Settlement delayed by 3 days
+ORD-1137,UTR500137,DATE_SHIFT,MATCHED,Settlement delayed by 2 days
+ORD-1138,UTR500138,DATE_SHIFT,MATCHED,Settlement delayed by 1 days
+ORD-1139,UTR500139,DATE_SHIFT,MATCHED,Settlement delayed by 1 days
+ORD-1140,UTR500140,DATE_SHIFT,MATCHED,Settlement delayed by 2 days
+ORD-1141,UTR500141,DATE_SHIFT,MATCHED,Settlement delayed by 3 days
+ORD-1142,UTR500142,DATE_SHIFT,MATCHED,Settlement delayed by 2 days
+ORD-1143,UTR500143,DATE_SHIFT,MATCHED,Settlement delayed by 3 days
+ORD-1144,UTR500144,DATE_SHIFT,MATCHED,Settlement delayed by 2 days
+ORD-1145,UTR500145,DATE_SHIFT,MATCHED,Settlement delayed by 2 days
+ORD-1146,UTR500146,DATE_SHIFT,MATCHED,Settlement delayed by 3 days
+ORD-1147,UTR500147,DATE_SHIFT,MATCHED,Settlement delayed by 3 days
+ORD-1148,UTR500148,DATE_SHIFT,MATCHED,Settlement delayed by 3 days
+ORD-1149,UTR500149,DATE_SHIFT,MATCHED,Settlement delayed by 2 days
+ORD-1150,UTR500150,DATE_SHIFT,MATCHED,Settlement delayed by 3 days
+ORD-1151,UTR500151,AMOUNT_NEAR_MATCH,UNRESOLVED,Amount near match (3728.0 vs 3726.0)
+ORD-1152,UTR500152,AMOUNT_NEAR_MATCH,UNRESOLVED,Amount near match (4918.0 vs 4893.0)
+ORD-1153,UTR500153,AMOUNT_NEAR_MATCH,UNRESOLVED,Amount near match (5288.0 vs 5286.0)
+ORD-1154,UTR500154,AMOUNT_NEAR_MATCH,UNRESOLVED,Amount near match (8761.0 vs 8760.0)
+ORD-1155,UTR500155,AMOUNT_NEAR_MATCH,UNRESOLVED,Amount near match (6643.0 vs 6641.0)
+ORD-1156,UTR500156,AMOUNT_NEAR_MATCH,UNRESOLVED,Amount near match (6775.0 vs 6774.0)
+ORD-1157,UTR500157,AMOUNT_NEAR_MATCH,UNRESOLVED,Amount near match (3970.0 vs 3945.0)
+ORD-1158,UTR500158,AMOUNT_NEAR_MATCH,UNRESOLVED,Amount near match (4370.0 vs 4345.0)
+ORD-1159,UTR500159,AMOUNT_NEAR_MATCH,UNRESOLVED,Amount near match (7921.0 vs 7916.0)
+ORD-1160,UTR500160,AMOUNT_NEAR_MATCH,UNRESOLVED,Amount near match (2317.0 vs 2316.0)
+ORD-1161,UTR500161,AMBIGUOUS,UNRESOLVED,Multiple bank rows with identical amount/date
+ORD-1162,UTR500163,AMBIGUOUS,UNRESOLVED,Multiple bank rows with identical amount/date
+ORD-1163,UTR500165,AMBIGUOUS,UNRESOLVED,Multiple bank rows with identical amount/date
+ORD-1164,UTR500167,AMBIGUOUS,UNRESOLVED,Multiple bank rows with identical amount/date
+ORD-1165,UTR500169,AMBIGUOUS,UNRESOLVED,Multiple bank rows with identical amount/date
+ORD-1166,UTR500171,AMBIGUOUS,UNRESOLVED,Multiple bank rows with identical amount/date
+ORD-1167,UTR500173,AMBIGUOUS,UNRESOLVED,Multiple bank rows with identical amount/date
+ORD-1168,UTR500175,AMBIGUOUS,UNRESOLVED,Multiple bank rows with identical amount/date
+ORD-1169,UTR500177,AMBIGUOUS,UNRESOLVED,Multiple bank rows with identical amount/date
+ORD-1170,UTR500179,AMBIGUOUS,UNRESOLVED,Multiple bank rows with identical amount/date
+ORD-1171,UTR500181,AMBIGUOUS,UNRESOLVED,Multiple bank rows with identical amount/date
+ORD-1172,UTR500183,AMBIGUOUS,UNRESOLVED,Multiple bank rows with identical amount/date
+ORD-1173,UTR500185,AMBIGUOUS,UNRESOLVED,Multiple bank rows with identical amount/date
+ORD-1174,UTR500187,AMBIGUOUS,UNRESOLVED,Multiple bank rows with identical amount/date
+ORD-1175,UTR500189,AMBIGUOUS,UNRESOLVED,Multiple bank rows with identical amount/date
+ORD-1176,UTR500191,FALSE_POSITIVE_TRAP,MATCHED,Matcher must select true reference and avoid decoy trap
+ORD-1178,UTR500193,FALSE_POSITIVE_TRAP,MATCHED,Matcher must select true reference and avoid decoy trap
+ORD-1180,UTR500195,FALSE_POSITIVE_TRAP,MATCHED,Matcher must select true reference and avoid decoy trap
+ORD-1182,UTR500197,FALSE_POSITIVE_TRAP,MATCHED,Matcher must select true reference and avoid decoy trap
+ORD-1184,UTR500199,FALSE_POSITIVE_TRAP,MATCHED,Matcher must select true reference and avoid decoy trap
+ORD-1186,UTR500201,FALSE_POSITIVE_TRAP,MATCHED,Matcher must select true reference and avoid decoy trap
+ORD-1188,UTR500203,FALSE_POSITIVE_TRAP,MATCHED,Matcher must select true reference and avoid decoy trap
+ORD-1190,UTR500205,FALSE_POSITIVE_TRAP,MATCHED,Matcher must select true reference and avoid decoy trap
+ORD-1192,UTR500207,FALSE_POSITIVE_TRAP,MATCHED,Matcher must select true reference and avoid decoy trap
+ORD-1194,UTR500209,FALSE_POSITIVE_TRAP,MATCHED,Matcher must select true reference and avoid decoy trap
+ORD-1196,,UNMATCHED_LEDGER,UNMATCHED,No bank statement counterpart exists
+ORD-1197,,UNMATCHED_LEDGER,UNMATCHED,No bank statement counterpart exists
+ORD-1198,,UNMATCHED_LEDGER,UNMATCHED,No bank statement counterpart exists
+ORD-1199,,UNMATCHED_LEDGER,UNMATCHED,No bank statement counterpart exists
+ORD-1200,,UNMATCHED_LEDGER,UNMATCHED,No bank statement counterpart exists
+ORD-1201,,UNMATCHED_LEDGER,UNMATCHED,No bank statement counterpart exists
+ORD-1202,,UNMATCHED_LEDGER,UNMATCHED,No bank statement counterpart exists
+ORD-1203,,UNMATCHED_LEDGER,UNMATCHED,No bank statement counterpart exists
+ORD-1204,,UNMATCHED_LEDGER,UNMATCHED,No bank statement counterpart exists
+ORD-1205,,UNMATCHED_LEDGER,UNMATCHED,No bank statement counterpart exists
+,UTR500211,UNMATCHED_BANK,UNMATCHED,No ledger record counterpart exists
+,UTR500212,UNMATCHED_BANK,UNMATCHED,No ledger record counterpart exists
+,UTR500213,UNMATCHED_BANK,UNMATCHED,No ledger record counterpart exists
+,UTR500214,UNMATCHED_BANK,UNMATCHED,No ledger record counterpart exists
+,UTR500215,UNMATCHED_BANK,UNMATCHED,No ledger record counterpart exists
+,UTR500216,UNMATCHED_BANK,UNMATCHED,No ledger record counterpart exists
+,UTR500217,UNMATCHED_BANK,UNMATCHED,No ledger record counterpart exists
+,UTR500218,UNMATCHED_BANK,UNMATCHED,No ledger record counterpart exists
+,UTR500219,UNMATCHED_BANK,UNMATCHED,No ledger record counterpart exists
+,UTR500220,UNMATCHED_BANK,UNMATCHED,No ledger record counterpart exists
+ORD-1206,UTR500221,DUPLICATE_NEAR_DUPLICATE,MATCHED,Legitimate duplicate transaction 1
+ORD-1207,UTR500222,DUPLICATE_NEAR_DUPLICATE,MATCHED,Legitimate duplicate transaction 2
+ORD-1208,UTR500223,DUPLICATE_NEAR_DUPLICATE,MATCHED,Legitimate duplicate transaction 1
+ORD-1209,UTR500224,DUPLICATE_NEAR_DUPLICATE,MATCHED,Legitimate duplicate transaction 2
+ORD-1210,UTR500225,DUPLICATE_NEAR_DUPLICATE,MATCHED,Legitimate duplicate transaction 1
+ORD-1211,UTR500226,DUPLICATE_NEAR_DUPLICATE,MATCHED,Legitimate duplicate transaction 2
+ORD-1212,UTR500227,DUPLICATE_NEAR_DUPLICATE,MATCHED,Legitimate duplicate transaction 1
+ORD-1213,UTR500228,DUPLICATE_NEAR_DUPLICATE,MATCHED,Legitimate duplicate transaction 2
+ORD-1214,UTR500229,DUPLICATE_NEAR_DUPLICATE,MATCHED,Legitimate duplicate transaction 1
+ORD-1215,UTR500230,DUPLICATE_NEAR_DUPLICATE,MATCHED,Legitimate duplicate transaction 2
+ORD-1216,UTR500231,DUPLICATE_NEAR_DUPLICATE,MATCHED,Legitimate duplicate transaction 1
+ORD-1217,UTR500232,DUPLICATE_NEAR_DUPLICATE,MATCHED,Legitimate duplicate transaction 2
+ORD-1218,UTR500233,DUPLICATE_NEAR_DUPLICATE,MATCHED,Legitimate duplicate transaction 1
+ORD-1219,UTR500234,DUPLICATE_NEAR_DUPLICATE,MATCHED,Legitimate duplicate transaction 2
+ORD-1220,UTR500235,DUPLICATE_NEAR_DUPLICATE,MATCHED,Legitimate duplicate transaction 1
+ORD-1221,UTR500236,DUPLICATE_NEAR_DUPLICATE,MATCHED,Legitimate duplicate transaction 2
+ORD-1222,UTR500237,DUPLICATE_NEAR_DUPLICATE,MATCHED,Legitimate duplicate transaction 1
+ORD-1223,UTR500238,DUPLICATE_NEAR_DUPLICATE,MATCHED,Legitimate duplicate transaction 2
+ORD-1224,UTR500239,DUPLICATE_NEAR_DUPLICATE,MATCHED,Legitimate duplicate transaction 1
+ORD-1225,UTR500240,DUPLICATE_NEAR_DUPLICATE,MATCHED,Legitimate duplicate transaction 2
+ORD-1226,UTR500241,REVERSAL_ADJUSTMENT,UNRESOLVED,Reversal adjustment transaction
+ORD-1227,UTR500242,REVERSAL_ADJUSTMENT,UNRESOLVED,Reversal adjustment transaction
+ORD-1228,UTR500243,REVERSAL_ADJUSTMENT,UNRESOLVED,Reversal adjustment transaction
+ORD-1229,UTR500244,REVERSAL_ADJUSTMENT,UNRESOLVED,Reversal adjustment transaction
+ORD-1230,UTR500245,REVERSAL_ADJUSTMENT,UNRESOLVED,Reversal adjustment transaction
+ORD-1231,UTR500246,REVERSAL_ADJUSTMENT,UNRESOLVED,Reversal adjustment transaction
+ORD-1232,UTR500247,FEE_ONLY_SETTLEMENT,UNRESOLVED,Explicit settlement fee deduction
+ORD-1233,UTR500248,FEE_ONLY_SETTLEMENT,UNRESOLVED,Explicit settlement fee deduction
+ORD-1234,UTR500249,FEE_ONLY_SETTLEMENT,UNRESOLVED,Explicit settlement fee deduction
+ORD-1235,UTR500250,FEE_ONLY_SETTLEMENT,UNRESOLVED,Explicit settlement fee deduction

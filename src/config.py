@@ -33,8 +33,9 @@ class ReconciliationConfig:
     GROQ_MODEL: str = "groq/compound"
     ENABLE_AI_ASSIST: bool = True
 
-    # Custom Data Directory Configuration
+    # Custom Data & Debug Mode Configuration
     LEDGERLENS_CUSTOM_DATA_DIR: str = "data/custom"
+    LEDGERLENS_DEBUG_MODE: bool = False
 
     # Schema column definitions
     LEDGER_COLUMNS: List[str] = field(
