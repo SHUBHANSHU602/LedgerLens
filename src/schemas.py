@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, asdict, field
 from typing import Dict, Any, Optional, List
+from pydantic import BaseModel, Field, ConfigDict
 
 
 @dataclass
@@ -16,9 +17,22 @@ class EvidenceBreakdown:
         return asdict(self)
 
 
+class AIEvaluationSchema(BaseModel):
+    """Pydantic schema for validating structured Groq LLM responses."""
+    model_config = ConfigDict(extra="ignore")
+
+    same_transaction: bool = False
+    selected_bank_id: Optional[str] = None
+    reference_evidence: str = ""
+    amount_consistent: bool = False
+    date_consistent: bool = False
+    fee_explanation: str = ""
+    reason: str = ""
+
+
 @dataclass
 class ReconciliationRecord:
-    """Structured reconciliation result output record."""
+    """Structured reconciliation result output record with full observability fields."""
     ledger_id: str
     bank_id: str
     status: str
@@ -29,6 +43,10 @@ class ReconciliationRecord:
     model_used: str = "none"
     ai_reason: str = ""
     original_score: float = 0.0
+    amount_difference: float = 0.0
+    date_difference: int = 0
+    candidate_rank: int = 0
+    candidate_count: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -42,6 +60,10 @@ class ReconciliationRecord:
             "model_used": self.model_used,
             "ai_reason": self.ai_reason,
             "original_score": round(self.original_score, 4),
+            "amount_difference": round(self.amount_difference, 2),
+            "date_difference": self.date_difference,
+            "candidate_rank": self.candidate_rank,
+            "candidate_count": self.candidate_count,
         }
 
 

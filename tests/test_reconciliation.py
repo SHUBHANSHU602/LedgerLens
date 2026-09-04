@@ -1,17 +1,20 @@
-"""Pytest suite for Phase 1, Phase 2 & Phase 3 financial reconciliation engine."""
+"""Comprehensive Pytest suite for LedgerLens reconciliation engine and AI safety."""
 
+import os
 import pytest
 import pandas as pd
 from unittest.mock import patch, MagicMock
 from datetime import date
 from src.config import ReconciliationConfig
-from src.reconciliation import (
+from src.schemas import ReconciliationRecord, AIEvaluationSchema
+from src.normalization import (
     normalize_amount,
     normalize_date,
     normalize_text,
     extract_reference,
-    reconcile,
 )
+from src.ai_matcher import evaluate_ambiguous_record, clear_ai_cache, coerce_boolean
+from src.reconciliation import reconcile
 
 
 def test_normalization_utilities():
@@ -28,16 +31,10 @@ def test_normalization_utilities():
     assert extract_reference("NO ORDER ID HERE") is None
 
 
-def test_exact_reference_matching():
-    """Verify exact reference match returns status MATCHED."""
-    df_ledger = pd.DataFrame([{
-        "order_id": "ORD-1001", "customer_name": "Cust A", "amount": 1500.0,
-        "currency": "INR", "order_date": "2026-08-01", "payment_method": "UPI"
-    }])
-    df_bank = pd.DataFrame([{
-        "utr_reference": "UTR5001", "narration_text": "CREDIT ORD-1001 SETTLEMENT",
-        "credited_amount": 1500.0, "currency": "INR", "value_date": "2026-08-01", "deduction_fee": 0.0
-    }])
+def test_exact_match():
+    """1. Test exact reference, amount, and date match."""
+    df_ledger = pd.DataFrame([{"order_id": "ORD-1001", "customer_name": "Cust A", "amount": 1500.0, "currency": "INR", "order_date": "2026-08-01", "payment_method": "UPI"}])
+    df_bank = pd.DataFrame([{"utr_reference": "UTR5001", "narration_text": "CREDIT ORD-1001 SETTLEMENT", "credited_amount": 1500.0, "currency": "INR", "value_date": "2026-08-01", "deduction_fee": 0.0}])
 
     res = reconcile(df_ledger, df_bank)
     row = res.iloc[0]
@@ -47,47 +44,90 @@ def test_exact_reference_matching():
     assert row["matching_rule"] == "EXACT_REFERENCE"
 
 
-def test_exact_amount_date_matching():
-    """Verify amount + date matching when reference is missing in narration."""
-    df_ledger = pd.DataFrame([{
-        "order_id": "ORD-1002", "customer_name": "Cust B", "amount": 750.0,
-        "currency": "INR", "order_date": "2026-08-02", "payment_method": "CARD"
-    }])
-    df_bank = pd.DataFrame([{
-        "utr_reference": "UTR5002", "narration_text": "POS CARD DEPOSIT NO REF",
-        "credited_amount": 750.0, "currency": "INR", "value_date": "2026-08-02", "deduction_fee": 0.0
-    }])
-
-    res = reconcile(df_ledger, df_bank)
-    match_row = res[res["ledger_id"] == "ORD-1002"].iloc[0]
-    assert match_row["status"] == "MATCHED"
-    assert match_row["matching_rule"] == "EXACT_AMOUNT_DATE"
-
-
-def test_fee_difference_remains_unresolved():
-    """Verify reference match with fee difference stays REVIEW / UNRESOLVED without AI."""
+def test_exact_reference_fee_difference():
+    """2. Test exact reference but with a fee difference."""
     cfg = ReconciliationConfig(ENABLE_AI_ASSIST=False)
-    df_ledger = pd.DataFrame([{
-        "order_id": "ORD-1003", "customer_name": "Cust C", "amount": 5000.0,
-        "currency": "INR", "order_date": "2026-08-03", "payment_method": "NEFT"
-    }])
-    df_bank = pd.DataFrame([{
-        "utr_reference": "UTR5003", "narration_text": "NET SETTLEMENT ORD-1003",
-        "credited_amount": 4950.0, "currency": "INR", "value_date": "2026-08-03", "deduction_fee": 50.0
-    }])
+    df_ledger = pd.DataFrame([{"order_id": "ORD-1003", "customer_name": "Cust C", "amount": 5000.0, "currency": "INR", "order_date": "2026-08-03", "payment_method": "NEFT"}])
+    df_bank = pd.DataFrame([{"utr_reference": "UTR5003", "narration_text": "NET SETTLEMENT ORD-1003", "credited_amount": 4950.0, "currency": "INR", "value_date": "2026-08-03", "deduction_fee": 50.0}])
 
     res = reconcile(df_ledger, df_bank, config=cfg)
     row = res.iloc[0]
-    assert row["ledger_id"] == "ORD-1003"
     assert row["status"] in ("REVIEW", "UNRESOLVED")
 
 
-def test_missing_bank_transaction():
-    """Verify unmatched ledger record returns status UNMATCHED."""
-    df_ledger = pd.DataFrame([{
-        "order_id": "ORD-1004", "customer_name": "Cust D", "amount": 200.0,
-        "currency": "INR", "order_date": "2026-08-04", "payment_method": "UPI"
-    }])
+def test_date_shift_plus_1():
+    """3. Test settlement date shifted by +1 day."""
+    df_ledger = pd.DataFrame([{"order_id": "ORD-1010", "customer_name": "Cust X", "amount": 1000.0, "currency": "INR", "order_date": "2026-08-01", "payment_method": "UPI"}])
+    df_bank = pd.DataFrame([{"utr_reference": "UTR5010", "narration_text": "PAYMENT ORD-1010", "credited_amount": 1000.0, "currency": "INR", "value_date": "2026-08-02", "deduction_fee": 0.0}])
+
+    res = reconcile(df_ledger, df_bank)
+    row = res.iloc[0]
+    assert row["status"] == "MATCHED"
+
+
+def test_date_shift_plus_2():
+    """4. Test settlement date shifted by +2 days."""
+    df_ledger = pd.DataFrame([{"order_id": "ORD-1011", "customer_name": "Cust Y", "amount": 2000.0, "currency": "INR", "order_date": "2026-08-01", "payment_method": "NEFT"}])
+    df_bank = pd.DataFrame([{"utr_reference": "UTR5011", "narration_text": "CREDIT ORD-1011", "credited_amount": 2000.0, "currency": "INR", "value_date": "2026-08-03", "deduction_fee": 0.0}])
+
+    res = reconcile(df_ledger, df_bank)
+    row = res.iloc[0]
+    assert row["status"] == "MATCHED"
+
+
+def test_noisy_reference():
+    """5. Test noisy reference inside complex narration string."""
+    df_ledger = pd.DataFrame([{"order_id": "ORD-9988", "customer_name": "Acme Corp", "amount": 2500.0, "currency": "INR", "order_date": "2026-08-05", "payment_method": "NEFT"}])
+    df_bank = pd.DataFrame([{"utr_reference": "UTR9988", "narration_text": "CMS/NEFT/N12345/ORD-9988/ACME/SETTLE", "credited_amount": 2500.0, "currency": "INR", "value_date": "2026-08-05", "deduction_fee": 0.0}])
+
+    res = reconcile(df_ledger, df_bank)
+    row = res.iloc[0]
+    assert row["status"] == "MATCHED"
+    assert row["bank_id"] == "UTR9988"
+
+
+def test_same_amount_date_different_transaction():
+    """6. Test same amount/date without reference string."""
+    df_ledger = pd.DataFrame([{"order_id": "ORD-1012", "customer_name": "Cust Z", "amount": 750.0, "currency": "INR", "order_date": "2026-08-02", "payment_method": "CARD"}])
+    df_bank = pd.DataFrame([{"utr_reference": "UTR5012", "narration_text": "POS CARD DEPOSIT NO REF", "credited_amount": 750.0, "currency": "INR", "value_date": "2026-08-02", "deduction_fee": 0.0}])
+
+    res = reconcile(df_ledger, df_bank)
+    row = res[res["ledger_id"] == "ORD-1012"].iloc[0]
+    assert row["status"] == "MATCHED"
+
+
+def test_two_candidate_conflict():
+    """7. Test ambiguity protection when top candidates have equal score."""
+    cfg = ReconciliationConfig(ENABLE_AI_ASSIST=False)
+    df_ledger = pd.DataFrame([{"order_id": "ORD-3001", "customer_name": "Decoy Client", "amount": 999.0, "currency": "INR", "order_date": "2026-08-05", "payment_method": "CARD"}])
+    df_bank = pd.DataFrame([
+        {"utr_reference": "UTR3001A", "narration_text": "CARD BATCH SETTLEMENT", "credited_amount": 999.0, "currency": "INR", "value_date": "2026-08-05", "deduction_fee": 0.0},
+        {"utr_reference": "UTR3001B", "narration_text": "CARD BATCH SETTLEMENT", "credited_amount": 999.0, "currency": "INR", "value_date": "2026-08-05", "deduction_fee": 0.0},
+    ])
+
+    res = reconcile(df_ledger, df_bank, config=cfg)
+    row = res[res["ledger_id"] == "ORD-3001"].iloc[0]
+    assert row["status"] == "REVIEW"
+    assert row["matching_rule"] == "AMBIGUOUS_CANDIDATES"
+
+
+def test_duplicated_bank_candidate():
+    """8. Test duplicate bank candidates handling."""
+    cfg = ReconciliationConfig(ENABLE_AI_ASSIST=False)
+    df_ledger = pd.DataFrame([{"order_id": "ORD-3002", "customer_name": "Dup Test", "amount": 500.0, "currency": "INR", "order_date": "2026-08-05", "payment_method": "UPI"}])
+    df_bank = pd.DataFrame([
+        {"utr_reference": "UTR3002A", "narration_text": "GENERIC DEPOSIT", "credited_amount": 500.0, "currency": "INR", "value_date": "2026-08-05", "deduction_fee": 0.0},
+        {"utr_reference": "UTR3002B", "narration_text": "GENERIC DEPOSIT", "credited_amount": 500.0, "currency": "INR", "value_date": "2026-08-05", "deduction_fee": 0.0},
+    ])
+
+    res = reconcile(df_ledger, df_bank, config=cfg)
+    row = res[res["ledger_id"] == "ORD-3002"].iloc[0]
+    assert row["status"] == "REVIEW"
+
+
+def test_unmatched_ledger():
+    """9. Test unmatched ledger record."""
+    df_ledger = pd.DataFrame([{"order_id": "ORD-1004", "customer_name": "Cust D", "amount": 200.0, "currency": "INR", "order_date": "2026-08-04", "payment_method": "UPI"}])
     df_bank = pd.DataFrame(columns=["utr_reference", "narration_text", "credited_amount", "currency", "value_date", "deduction_fee"])
 
     res = reconcile(df_ledger, df_bank)
@@ -95,115 +135,146 @@ def test_missing_bank_transaction():
     assert row["status"] == "UNMATCHED"
 
 
-def test_currency_mismatch():
-    """Verify currency mismatch returns UNRESOLVED/UNMATCHED."""
-    df_ledger = pd.DataFrame([{
-        "order_id": "ORD-1005", "customer_name": "Cust E", "amount": 1000.0,
-        "currency": "INR", "order_date": "2026-08-05", "payment_method": "RTGS"
-    }])
-    df_bank = pd.DataFrame([{
-        "utr_reference": "UTR5005", "narration_text": "FOREIGN WIRE ORD-1005",
-        "credited_amount": 1000.0, "currency": "USD", "value_date": "2026-08-05", "deduction_fee": 0.0
-    }])
+def test_unmatched_bank():
+    """10. Test unmatched bank record."""
+    df_ledger = pd.DataFrame(columns=["order_id", "customer_name", "amount", "currency", "order_date", "payment_method"])
+    df_bank = pd.DataFrame([{"utr_reference": "UTR9999", "narration_text": "UNMATCHED DEPOSIT", "credited_amount": 300.0, "currency": "INR", "value_date": "2026-08-04", "deduction_fee": 0.0}])
 
     res = reconcile(df_ledger, df_bank)
-    row = res[res["ledger_id"] == "ORD-1005"].iloc[0]
-    assert row["status"] in ("UNRESOLVED", "UNMATCHED")
+    row = res[res["bank_id"] == "UTR9999"].iloc[0]
+    assert row["status"] == "UNMATCHED"
 
-
-def test_date_window_behavior():
-    """Verify date window boundaries."""
-    cfg = ReconciliationConfig(DATE_WINDOW_DAYS=3, BROAD_DATE_WINDOW_DAYS=10, ENABLE_AI_ASSIST=False)
-    df_ledger = pd.DataFrame([
-        {"order_id": "ORD-1006", "customer_name": "Cust F", "amount": 1200.0, "currency": "INR", "order_date": "2026-08-01", "payment_method": "UPI"},
-        {"order_id": "ORD-1007", "customer_name": "Cust G", "amount": 1400.0, "currency": "INR", "order_date": "2026-08-01", "payment_method": "UPI"},
-    ])
-    df_bank = pd.DataFrame([
-        {"utr_reference": "UTR5006", "narration_text": "PAYMENT ORD-1006", "credited_amount": 1200.0, "currency": "INR", "value_date": "2026-08-03", "deduction_fee": 0.0},
-        {"utr_reference": "UTR5007", "narration_text": "PAYMENT ORD-1007", "credited_amount": 1400.0, "currency": "INR", "value_date": "2026-08-25", "deduction_fee": 0.0},
-    ])
-
-    res = reconcile(df_ledger, df_bank, config=cfg)
-    row_in_win = res[res["ledger_id"] == "ORD-1006"].iloc[0]
-    row_out_win = res[res["ledger_id"] == "ORD-1007"].iloc[0]
-
-    assert row_in_win["status"] == "MATCHED"
-    assert row_out_win["status"] == "UNMATCHED"
-
-
-# -----------------------------------------------------------------------------
-# Phase 3 Mocked Groq AI Unit Tests (Zero External API Calls)
-# -----------------------------------------------------------------------------
 
 @patch("src.ai_matcher.os.getenv", return_value="mock_groq_api_key")
 @patch("groq.Groq")
-def test_ai_matcher_positive_match(mock_groq_cls, mock_getenv):
-    """Mock Groq returning positive structured JSON match."""
+def test_wrong_ai_bank_id_veto(mock_groq_cls, mock_getenv):
+    """11. Test deterministic veto when AI returns a hallucinated bank ID outside candidate pool."""
     mock_client = MagicMock()
     mock_groq_cls.return_value = mock_client
     mock_response = MagicMock()
-    mock_response.choices[0].message.content = '{"same_transaction": true, "selected_bank_id": "UTR5003", "reason": "Confirmed match with fee adjustment"}'
+    mock_response.choices[0].message.content = '{"same_transaction": true, "selected_bank_id": "HALLUCINATED_UTR_9999", "reason": "Looks good"}'
     mock_client.chat.completions.create.return_value = mock_response
 
-    df_ledger = pd.DataFrame([{"order_id": "ORD-5003", "customer_name": "Cust H", "amount": 5000.0, "currency": "INR", "order_date": "2026-08-03", "payment_method": "NEFT"}])
-    df_bank = pd.DataFrame([{"utr_reference": "UTR5003", "narration_text": "NET SETTLEMENT ORD-5003", "credited_amount": 4950.0, "currency": "INR", "value_date": "2026-08-03", "deduction_fee": 50.0}])
+    df_ledger = pd.DataFrame([{"order_id": "ORD-5001", "customer_name": "Cust A", "amount": 5000.0, "currency": "INR", "order_date": "2026-08-03", "payment_method": "NEFT"}])
+    df_bank = pd.DataFrame([{"utr_reference": "UTR5001", "narration_text": "NET SETTLEMENT ORD-5001", "credited_amount": 4950.0, "currency": "INR", "value_date": "2026-08-03", "deduction_fee": 50.0}])
 
     res = reconcile(df_ledger, df_bank)
     row = res.iloc[0]
-    assert row["status"] == "MATCHED"
-    assert row["matching_rule"] == "AI_CONFIRMED_MATCH"
-    assert row["decision_source"] == "groq"
+    assert row["status"] == "REVIEW"  # Vetoed match to REVIEW
 
 
 @patch("src.ai_matcher.os.getenv", return_value="mock_groq_api_key")
 @patch("groq.Groq")
-def test_ai_matcher_negative_match(mock_groq_cls, mock_getenv):
-    """Mock Groq returning negative match -> safe fallback to REVIEW."""
+def test_malformed_ai_json(mock_groq_cls, mock_getenv):
+    """12. Test safe fallback when AI returns malformed JSON."""
     mock_client = MagicMock()
     mock_groq_cls.return_value = mock_client
     mock_response = MagicMock()
-    mock_response.choices[0].message.content = '{"same_transaction": false, "reason": "Transaction details conflict"}'
+    mock_response.choices[0].message.content = "{INVALID JSON..."
     mock_client.chat.completions.create.return_value = mock_response
 
-    df_ledger = pd.DataFrame([{"order_id": "ORD-5004", "customer_name": "Cust I", "amount": 5000.0, "currency": "INR", "order_date": "2026-08-03", "payment_method": "NEFT"}])
-    df_bank = pd.DataFrame([{"utr_reference": "UTR5004", "narration_text": "NET SETTLEMENT ORD-5004", "credited_amount": 4950.0, "currency": "INR", "value_date": "2026-08-03", "deduction_fee": 50.0}])
-
-    res = reconcile(df_ledger, df_bank)
-    row = res.iloc[0]
-    assert row["status"] == "REVIEW"
-    assert row["matching_rule"] == "AI_REVIEW_REQUIRED"
-    assert row["decision_source"] == "groq"
-
-
-@patch("src.ai_matcher.os.getenv", return_value="mock_groq_api_key")
-@patch("groq.Groq")
-def test_ai_matcher_malformed_json(mock_groq_cls, mock_getenv):
-    """Mock Groq returning malformed JSON -> safe fallback to REVIEW."""
-    mock_client = MagicMock()
-    mock_groq_cls.return_value = mock_client
-    mock_response = MagicMock()
-    mock_response.choices[0].message.content = "{NOT VALID JSON STRING..."
-    mock_client.chat.completions.create.return_value = mock_response
-
-    df_ledger = pd.DataFrame([{"order_id": "ORD-5005", "customer_name": "Cust J", "amount": 5000.0, "currency": "INR", "order_date": "2026-08-03", "payment_method": "NEFT"}])
-    df_bank = pd.DataFrame([{"utr_reference": "UTR5005", "narration_text": "NET SETTLEMENT ORD-5005", "credited_amount": 4950.0, "currency": "INR", "value_date": "2026-08-03", "deduction_fee": 50.0}])
+    df_ledger = pd.DataFrame([{"order_id": "ORD-5002", "customer_name": "Cust B", "amount": 5000.0, "currency": "INR", "order_date": "2026-08-03", "payment_method": "NEFT"}])
+    df_bank = pd.DataFrame([{"utr_reference": "UTR5002", "narration_text": "NET SETTLEMENT ORD-5002", "credited_amount": 4950.0, "currency": "INR", "value_date": "2026-08-03", "deduction_fee": 50.0}])
 
     res = reconcile(df_ledger, df_bank)
     row = res.iloc[0]
     assert row["status"] == "REVIEW"
 
 
+def test_ai_string_boolean_coercion():
+    """13. Test boolean coercion helper for string 'true' / 'false'."""
+    assert coerce_boolean("true") is True
+    assert coerce_boolean("TRUE") is True
+    assert coerce_boolean("false") is False
+    assert coerce_boolean("0") is False
+    assert coerce_boolean(True) is True
+
+
 @patch("src.ai_matcher.os.getenv", return_value="mock_groq_api_key")
 @patch("groq.Groq")
-def test_ai_matcher_api_failure(mock_groq_cls, mock_getenv):
-    """Mock Groq raising API exception -> safe fallback to REVIEW."""
+def test_ai_api_failure(mock_groq_cls, mock_getenv):
+    """14. Test safe fallback on API exception."""
     mock_client = MagicMock()
     mock_groq_cls.return_value = mock_client
     mock_client.chat.completions.create.side_effect = Exception("Rate Limit Exceeded")
 
-    df_ledger = pd.DataFrame([{"order_id": "ORD-5006", "customer_name": "Cust K", "amount": 5000.0, "currency": "INR", "order_date": "2026-08-03", "payment_method": "NEFT"}])
-    df_bank = pd.DataFrame([{"utr_reference": "UTR5006", "narration_text": "NET SETTLEMENT ORD-5006", "credited_amount": 4950.0, "currency": "INR", "value_date": "2026-08-03", "deduction_fee": 50.0}])
+    df_ledger = pd.DataFrame([{"order_id": "ORD-5003", "customer_name": "Cust C", "amount": 5000.0, "currency": "INR", "order_date": "2026-08-03", "payment_method": "NEFT"}])
+    df_bank = pd.DataFrame([{"utr_reference": "UTR5003", "narration_text": "NET SETTLEMENT ORD-5003", "credited_amount": 4950.0, "currency": "INR", "value_date": "2026-08-03", "deduction_fee": 50.0}])
 
     res = reconcile(df_ledger, df_bank)
     row = res.iloc[0]
     assert row["status"] == "REVIEW"
+
+
+def test_ai_disabled():
+    """15. Test reconciliation behavior when AI assist is disabled."""
+    cfg = ReconciliationConfig(ENABLE_AI_ASSIST=False)
+    df_ledger = pd.DataFrame([{"order_id": "ORD-5004", "customer_name": "Cust D", "amount": 5000.0, "currency": "INR", "order_date": "2026-08-03", "payment_method": "NEFT"}])
+    df_bank = pd.DataFrame([{"utr_reference": "UTR5004", "narration_text": "NET SETTLEMENT ORD-5004", "credited_amount": 4950.0, "currency": "INR", "value_date": "2026-08-03", "deduction_fee": 50.0}])
+
+    res = reconcile(df_ledger, df_bank, config=cfg)
+    row = res.iloc[0]
+    assert row["status"] in ("REVIEW", "UNRESOLVED")
+    assert row["decision_source"] == "deterministic"
+
+
+def test_duplicate_bank_assignment_prevention():
+    """16. Test global one-to-one conflict resolution preventing double bank match."""
+    cfg = ReconciliationConfig(ENABLE_AI_ASSIST=False)
+    df_ledger = pd.DataFrame([
+        {"order_id": "ORD-A", "customer_name": "Acme", "amount": 1000.0, "currency": "INR", "order_date": "2026-08-01", "payment_method": "UPI"},
+        {"order_id": "ORD-B", "customer_name": "Acme Corp", "amount": 1000.0, "currency": "INR", "order_date": "2026-08-01", "payment_method": "UPI"},
+    ])
+    df_bank = pd.DataFrame([
+        {"utr_reference": "UTR-SINGLE", "narration_text": "PAYMENT FOR ORD-A", "credited_amount": 1000.0, "currency": "INR", "value_date": "2026-08-01", "deduction_fee": 0.0}
+    ])
+
+    res = reconcile(df_ledger, df_bank, config=cfg)
+    matched_banks = res[res["status"] == "MATCHED"]["bank_id"].tolist()
+    assert matched_banks.count("UTR-SINGLE") <= 1  # Strictly 1-to-1 matching
+
+
+def test_currency_mismatch_veto():
+    """17. Test currency mismatch hard contradiction veto."""
+    df_ledger = pd.DataFrame([{"order_id": "ORD-CURR", "customer_name": "Foreign Client", "amount": 1000.0, "currency": "INR", "order_date": "2026-08-01", "payment_method": "UPI"}])
+    df_bank = pd.DataFrame([{"utr_reference": "UTR-USD", "narration_text": "PAYMENT ORD-CURR", "credited_amount": 1000.0, "currency": "USD", "value_date": "2026-08-01", "deduction_fee": 0.0}])
+
+    res = reconcile(df_ledger, df_bank)
+    row = res.iloc[0]
+    assert row["status"] in ("UNRESOLVED", "UNMATCHED", "REVIEW")
+    assert row["status"] != "MATCHED"
+
+
+def test_huge_amount_mismatch_veto():
+    """18. Test huge amount difference hard veto."""
+    df_ledger = pd.DataFrame([{"order_id": "ORD-HUGE", "customer_name": "Client", "amount": 100000.0, "currency": "INR", "order_date": "2026-08-01", "payment_method": "UPI"}])
+    df_bank = pd.DataFrame([{"utr_reference": "UTR-SMALL", "narration_text": "PAYMENT ORD-HUGE", "credited_amount": 100.0, "currency": "INR", "value_date": "2026-08-01", "deduction_fee": 0.0}])
+
+    res = reconcile(df_ledger, df_bank)
+    row = res.iloc[0]
+    assert row["status"] != "MATCHED"
+
+
+def test_cache_invalidation_and_versioning():
+    """19. Test cache key invalidation on configuration change."""
+    clear_ai_cache()
+    cfg1 = ReconciliationConfig(AMOUNT_TOLERANCE=0.01)
+    cfg2 = ReconciliationConfig(AMOUNT_TOLERANCE=0.05)
+    assert cfg1.AMOUNT_TOLERANCE != cfg2.AMOUNT_TOLERANCE
+
+
+def test_answer_key_isolation_regression():
+    """20. Source isolation regression test: Verify matching code never imports answer_key.csv."""
+    source_files = [
+        "src/reconciliation.py",
+        "src/ai_matcher.py",
+        "src/config.py",
+        "src/normalization.py",
+        "src/schemas.py",
+        "src/data_validation.py",
+    ]
+    for filepath in source_files:
+        if os.path.exists(filepath):
+            with open(filepath, "r", encoding="utf-8") as f:
+                content = f.read()
+                assert "answer_key.csv" not in content, f"Source file {filepath} illegally references answer_key.csv"

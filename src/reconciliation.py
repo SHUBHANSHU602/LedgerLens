@@ -1,4 +1,4 @@
-"""Deterministic & Evidence-based Financial Reconciliation Engine (Phase 3)."""
+"""Deterministic & Evidence-based Financial Reconciliation Engine (Phase 2 & 3)."""
 
 from typing import Dict, Any, List, Optional, Tuple
 import pandas as pd
@@ -90,7 +90,7 @@ def reconcile(
     df_bank: pd.DataFrame,
     config: ReconciliationConfig = CONFIG,
 ) -> pd.DataFrame:
-    """Perform multi-tier deterministic and AI-assisted reconciliation."""
+    """Perform multi-tier deterministic and AI-assisted reconciliation with global one-to-one conflict resolution."""
     valid_l, errs_l = validate_ledger_schema(df_ledger, config)
     valid_b, errs_b = validate_bank_schema(df_bank, config)
     if not (valid_l and valid_b):
@@ -113,12 +113,16 @@ def reconcile(
 
     def add_result(
         l_id: str, b_id: str, status: str, rule: str, score: float, reason: str,
-        source: str = "deterministic", model: str = "none", ai_reason: str = "", orig_score: Optional[float] = None
+        source: str = "deterministic", model: str = "none", ai_reason: str = "",
+        orig_score: Optional[float] = None, amt_diff: float = 0.0, date_diff: int = 0,
+        rank: int = 1, count: int = 1
     ):
         rec = ReconciliationRecord(
             ledger_id=l_id, bank_id=b_id, status=status, matching_rule=rule,
             score=score, reason=reason, decision_source=source, model_used=model,
             ai_reason=ai_reason, original_score=orig_score if orig_score is not None else score,
+            amount_difference=amt_diff, date_difference=date_diff,
+            candidate_rank=rank, candidate_count=count,
         )
         matched_results.append(rec.to_dict())
         if l_id:
@@ -138,9 +142,9 @@ def reconcile(
             b_id, b_amt, b_date, b_curr = b_row["utr_reference"], b_row["norm_amount"], b_row["norm_date"], b_row["norm_curr"]
             amt_diff, date_diff = abs(l_amt - b_amt), abs((l_date - b_date).days)
             if l_curr != b_curr:
-                add_result(l_id, b_id, "UNRESOLVED", "CURRENCY_MISMATCH", 0.0, f"Currency mismatch ({l_curr} vs {b_curr})")
+                add_result(l_id, b_id, "UNRESOLVED", "CURRENCY_MISMATCH", 0.0, f"Currency mismatch ({l_curr} vs {b_curr})", amt_diff=amt_diff, date_diff=date_diff)
             elif amt_diff <= config.AMOUNT_TOLERANCE and date_diff <= config.DATE_WINDOW_DAYS:
-                add_result(l_id, b_id, "MATCHED", "EXACT_REFERENCE", 1.0, "Exact reference, amount, and date match")
+                add_result(l_id, b_id, "MATCHED", "EXACT_REFERENCE", 1.0, "Exact reference, amount, and date match", amt_diff=amt_diff, date_diff=date_diff)
 
     # Tier 2: Exact Amount + Date Unique Match
     for l_idx, l_row in ledger[~ledger["order_id"].isin(assigned_ledger)].iterrows():
@@ -154,7 +158,7 @@ def reconcile(
             b_ref = b_row["extracted_ref"]
             if b_ref and b_ref != l_id:
                 continue
-            add_result(l_id, b_row["utr_reference"], "MATCHED", "EXACT_AMOUNT_DATE", 0.9, "Exact amount and date match")
+            add_result(l_id, b_row["utr_reference"], "MATCHED", "EXACT_AMOUNT_DATE", 0.9, "Exact amount and date match", amt_diff=0.0, date_diff=0)
 
     # Tier 3: Phase 3 Candidate Generation & Bounded AI Assistance
     unassigned = ledger[~ledger["order_id"].isin(assigned_ledger)]
@@ -174,41 +178,81 @@ def reconcile(
                 continue
 
             score, breakdown = compute_evidence_score(l_row, b_row, config)
-            candidate_pool.append((score, b_row["utr_reference"], b_row, breakdown))
+            candidate_pool.append((score, b_row["utr_reference"], b_row, breakdown, amt_diff, date_diff))
 
         candidate_pool.sort(key=lambda x: x[0], reverse=True)
         top_candidates = candidate_pool[:config.TOP_N_CANDIDATES]
 
         if not top_candidates:
-            add_result(l_id, "", "UNMATCHED", "NO_CANDIDATE", 0.0, "No candidate within broad window and tolerance")
+            add_result(l_id, "", "UNMATCHED", "NO_CANDIDATE", 0.0, "No candidate within broad window and tolerance", count=0)
         else:
-            top_score, top_b_id, _, _ = top_candidates[0]
-            is_ambiguous = len(top_candidates) > 1 and (top_score - top_candidates[1][0]) < config.AMBIGUITY_MARGIN
+            top_score, top_b_id, top_b_row, _, top_amt_diff, top_date_diff = top_candidates[0]
+            cand_count = len(top_candidates)
+            is_ambiguous = cand_count > 1 and (top_score - top_candidates[1][0]) < config.AMBIGUITY_MARGIN
 
             if is_ambiguous or (config.REVIEW_THRESHOLD <= top_score < config.HIGH_CONFIDENCE_THRESHOLD):
                 if config.ENABLE_AI_ASSIST and evaluate_ambiguous_record is not None:
-                    ai_eval = evaluate_ambiguous_record(l_row, top_candidates, config)
+                    # Pass top 3 candidates to AI matcher
+                    ai_input_candidates = [(c[0], c[1], c[2], c[3]) for c in top_candidates]
+                    ai_eval = evaluate_ambiguous_record(l_row, ai_input_candidates, config)
                     ai_status = ai_eval.get("status", "REVIEW")
                     ai_reason = ai_eval.get("reason", "")
                     ai_model = ai_eval.get("model_used", "none")
                     sel_b_id = ai_eval.get("selected_bank_id") or top_b_id
 
+                    # Safety Veto: selected bank ID must be in candidate pool
+                    if sel_b_id not in [c[1] for c in top_candidates]:
+                        ai_status, sel_b_id, ai_reason = "REVIEW", top_b_id, f"VETO: AI bank ID '{sel_b_id}' not in candidate pool."
+
                     if ai_status == "MATCHED":
-                        add_result(l_id, sel_b_id, "MATCHED", "AI_CONFIRMED_MATCH", top_score, f"AI Confirmed: {ai_reason}", source="groq", model=ai_model, ai_reason=ai_reason, orig_score=top_score)
+                        add_result(l_id, sel_b_id, "MATCHED", "AI_CONFIRMED_MATCH", top_score, f"AI Confirmed: {ai_reason}", source="groq", model=ai_model, ai_reason=ai_reason, orig_score=top_score, amt_diff=top_amt_diff, date_diff=top_date_diff, count=cand_count)
                     else:
-                        add_result(l_id, top_b_id, "REVIEW", "AI_REVIEW_REQUIRED", top_score, f"AI Review: {ai_reason}", source="groq", model=ai_model, ai_reason=ai_reason, orig_score=top_score)
+                        add_result(l_id, top_b_id, "REVIEW", "AI_REVIEW_REQUIRED", top_score, f"AI Review: {ai_reason}", source="groq", model=ai_model, ai_reason=ai_reason, orig_score=top_score, amt_diff=top_amt_diff, date_diff=top_date_diff, count=cand_count)
                 else:
                     rule = "AMBIGUOUS_CANDIDATES" if is_ambiguous else "SCORE_REVIEW"
-                    add_result(l_id, top_b_id, "REVIEW", rule, top_score, f"Deterministic review required ({top_score:.2f})")
+                    add_result(l_id, top_b_id, "REVIEW", rule, top_score, f"Deterministic review required ({top_score:.2f})", amt_diff=top_amt_diff, date_diff=top_date_diff, count=cand_count)
             elif top_score >= config.HIGH_CONFIDENCE_THRESHOLD:
-                add_result(l_id, top_b_id, "MATCHED", "SCORE_MATCHED", top_score, f"High confidence match ({top_score:.2f})")
+                add_result(l_id, top_b_id, "MATCHED", "SCORE_MATCHED", top_score, f"High confidence match ({top_score:.2f})", amt_diff=top_amt_diff, date_diff=top_date_diff, count=cand_count)
             else:
-                add_result(l_id, "", "UNMATCHED", "LOW_SCORE", top_score, f"Top score ({top_score:.2f}) below review threshold")
+                add_result(l_id, "", "UNMATCHED", "LOW_SCORE", top_score, f"Top score ({top_score:.2f}) below review threshold", amt_diff=top_amt_diff, date_diff=top_date_diff, count=cand_count)
+
+    # -------------------------------------------------------------------------
+    # Global One-To-One Conflict Resolution
+    # -------------------------------------------------------------------------
+    # Check for duplicate MATCHED bank assignments across ledger records
+    confirmed_bank_map: Dict[str, Tuple[int, float]] = {}  # bank_id -> (result_index, score)
+    conflicted_indices = set()
+
+    for idx, res in enumerate(matched_results):
+        b_id = res["bank_id"]
+        status = res["status"]
+        score = res["score"]
+
+        if status == "MATCHED" and b_id:
+            if b_id in confirmed_bank_map:
+                prev_idx, prev_score = confirmed_bank_map[b_id]
+                # Compare scores: higher score keeps bank_id; lower score downgraded to REVIEW
+                if score > prev_score:
+                    conflicted_indices.add(prev_idx)
+                    confirmed_bank_map[b_id] = (idx, score)
+                else:
+                    conflicted_indices.add(idx)
+            else:
+                confirmed_bank_map[b_id] = (idx, score)
+
+    # Apply One-To-One conflict resolution downgrades
+    for idx in conflicted_indices:
+        res = matched_results[idx]
+        res["status"] = "REVIEW"
+        res["matching_rule"] = "ONE_TO_ONE_CONFLICT"
+        res["reason"] = f"One-to-one conflict: Bank ID '{res['bank_id']}' claimed by higher confidence match."
+        res["bank_id"] = ""
 
     # Tier 4: Unmatched Remaining Bank Entries
-    for b_id in bank[~bank["utr_reference"].isin(assigned_bank)]["utr_reference"]:
+    claimed_bank_ids = {r["bank_id"] for r in matched_results if r["bank_id"] and r["status"] == "MATCHED"}
+    for b_id in bank[~bank["utr_reference"].isin(claimed_bank_ids)]["utr_reference"]:
         if not any(r["bank_id"] == b_id for r in matched_results):
-            add_result("", b_id, "UNMATCHED", "NO_MATCH", 0.0, "No matching ledger record found")
+            add_result("", b_id, "UNMATCHED", "NO_MATCH", 0.0, "No matching ledger record found", count=0)
 
     return pd.DataFrame(matched_results)
 
@@ -218,7 +262,7 @@ if __name__ == "__main__":
     ledger_path, bank_path = os.path.join("data", "ledger.csv"), os.path.join("data", "bank_statement.csv")
     if os.path.exists(ledger_path) and os.path.exists(bank_path):
         results = reconcile(pd.read_csv(ledger_path), pd.read_csv(bank_path))
-        print("Phase 3 Reconciliation Summary:")
+        print("Phase 2 & 3 Reconciliation Summary:")
         print(results["status"].value_counts().to_string())
         print("\nDecision Sources:")
         print(results["decision_source"].value_counts().to_string())
