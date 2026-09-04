@@ -24,32 +24,24 @@ LedgerLens solves financial reconciliation through a multi-tier pipeline:
 
 ## Architecture
 
-```text
-Ledger + Bank Datasets
-        │
-        ▼
-Schema Validation & Normalization (Amount, Date, Text)
-        │
-        ▼
-Candidate Generation & Multi-Weighted Evidence Scoring
-        │
-        ├── Tier 1: Exact Reference Match (Confidence 1.0)
-        ├── Tier 2: Exact Amount & Date Unique Match (Confidence 0.90)
-        └── Tier 3: Broad Candidate Pool & Ambiguity Gate
-                │
-                ├── Score >= 0.82 ─────────► High Confidence MATCHED
-                ├── 0.45 <= Score < 0.82 ──► Bounded Groq AI Assist
-                │                                │
-                │                                ├── Pydantic Veto Passed ──► MATCHED
-                │                                └── Veto Failed/Error ────► REVIEW
-                └── Score < 0.45 ──────────► UNMATCHED
-        │
-        ▼
-Global One-to-One Conflict Resolution (ONE_TO_ONE_CONFLICT Veto)
-        │
-        ▼
-Final Reconciled Output & Audit Observability Traces
+```mermaid
+graph TD
+    A[Data Sources: Ledger / Razorpay / Bank Statement] --> B[Data Ingestion & Normalization]
+    B --> C[Schema Validation]
+    C --> D[Multi-Tier Deterministic Matching Engine]
+    D --> E{Confidence & Ambiguity Evaluator}
+    E -- "Score >= 0.82 (High Confidence)" --> F[MATCHED]
+    E -- "0.45 <= Score < 0.82 (Ambiguous)" --> G[Bounded Groq AI Assistance]
+    E -- "Score < 0.45 (Low Confidence)" --> H[UNMATCHED]
+    G -- "AI Match + Safety Vetoes Passed" --> F
+    G -- "Veto Failed / Hallucination / Error" --> I[REVIEW]
+    F --> J[Global One-to-One Conflict Resolution]
+    I --> J
+    H --> J
+    J --> K[Finance Controller Exception Classifier]
+    K --> L[Observable REST API & Streamlit Dashboard]
 ```
+
 
 ---
 
@@ -121,6 +113,11 @@ LedgerLens includes a controlled synthetic benchmark generator (`scripts/generat
 - **Run Benchmark Evaluator**:
   ```bash
   python -m scripts.run_benchmark
+  ```
+
+- **Run Throughput Benchmark**:
+  ```bash
+  python -m scripts.run_throughput
   ```
 
 - **Launch FastAPI REST Server**:
