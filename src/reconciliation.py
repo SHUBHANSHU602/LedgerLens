@@ -1,29 +1,18 @@
 """Deterministic & Evidence-based Financial Reconciliation Engine (Phase 3)."""
 
-import re
-from datetime import datetime, date
 from typing import Dict, Any, List, Optional, Tuple
 import pandas as pd
-try:
-    from rapidfuzz import fuzz
-except ModuleNotFoundError:
-    class DummyFuzz:
-        @staticmethod
-        def token_set_ratio(s1, s2):
-            t1, t2 = set(str(s1).upper().split()), set(str(s2).upper().split())
-            union = t1.union(t2)
-            return (len(t1.intersection(t2)) / len(union) * 100.0) if union else 0.0
-
-        @staticmethod
-        def partial_ratio(s1, s2):
-            return 80.0 if str(s1).upper() in str(s2).upper() else 0.0
-
-    fuzz = DummyFuzz()
 
 try:
     from src.config import ReconciliationConfig, CONFIG
+    from src.normalization import normalize_amount, normalize_date, normalize_text, extract_reference, fuzz
+    from src.data_validation import validate_ledger_schema, validate_bank_schema
+    from src.schemas import ReconciliationRecord, EvidenceBreakdown
 except ModuleNotFoundError:
     from config import ReconciliationConfig, CONFIG
+    from normalization import normalize_amount, normalize_date, normalize_text, extract_reference, fuzz
+    from data_validation import validate_ledger_schema, validate_bank_schema
+    from schemas import ReconciliationRecord, EvidenceBreakdown
 
 try:
     from src.ai_matcher import evaluate_ambiguous_record
@@ -32,45 +21,6 @@ except ModuleNotFoundError:
         from ai_matcher import evaluate_ambiguous_record
     except ModuleNotFoundError:
         evaluate_ambiguous_record = None
-
-
-def normalize_amount(val: Any) -> float:
-    """Normalize numeric amount to 2-decimal float."""
-    if val is None or pd.isna(val):
-        return 0.0
-    if isinstance(val, (int, float)):
-        return round(float(val), 2)
-    clean_str = re.sub(r"[^\d.-]", "", str(val))
-    return round(float(clean_str), 2) if clean_str else 0.0
-
-
-def normalize_date(val: Any) -> date:
-    """Normalize date inputs to datetime.date object."""
-    if isinstance(val, date) and not isinstance(val, datetime):
-        return val
-    if isinstance(val, datetime):
-        return val.date()
-    val_str = str(val).strip()
-    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y"):
-        try:
-            return datetime.strptime(val_str, fmt).date()
-        except ValueError:
-            pass
-    raise ValueError(f"Unable to parse date string: {val}")
-
-
-def normalize_text(val: Any) -> str:
-    """Normalize string text (uppercase, stripped, single spaces)."""
-    if val is None or pd.isna(val):
-        return ""
-    return re.sub(r"\s+", " ", str(val).strip().upper())
-
-
-def extract_reference(text: str) -> Optional[str]:
-    """Extract standard order reference (e.g. ORD-1001) from narration text."""
-    norm_text = normalize_text(text)
-    match = re.search(r"ORD-\d+", norm_text)
-    return match.group(0) if match else None
 
 
 def compute_evidence_score(
@@ -126,7 +76,13 @@ def compute_evidence_score(
         (config.W_TEXT * text_score),
         4,
     )
-    return total_score, {"ref": round(ref_score, 2), "amount": round(amount_score, 2), "date": round(date_score, 2), "text": round(text_score, 2)}
+    breakdown = EvidenceBreakdown(
+        ref=round(ref_score, 2),
+        amount=round(amount_score, 2),
+        date=round(date_score, 2),
+        text=round(text_score, 2),
+    )
+    return total_score, breakdown.to_dict()
 
 
 def reconcile(
@@ -135,6 +91,11 @@ def reconcile(
     config: ReconciliationConfig = CONFIG,
 ) -> pd.DataFrame:
     """Perform multi-tier deterministic and AI-assisted reconciliation."""
+    valid_l, errs_l = validate_ledger_schema(df_ledger, config)
+    valid_b, errs_b = validate_bank_schema(df_bank, config)
+    if not (valid_l and valid_b):
+        raise ValueError(f"Schema validation failed: {errs_l + errs_b}")
+
     ledger, bank = df_ledger.copy(), df_bank.copy()
 
     ledger["norm_amount"] = ledger["amount"].apply(normalize_amount)
@@ -154,11 +115,12 @@ def reconcile(
         l_id: str, b_id: str, status: str, rule: str, score: float, reason: str,
         source: str = "deterministic", model: str = "none", ai_reason: str = "", orig_score: Optional[float] = None
     ):
-        matched_results.append({
-            "ledger_id": l_id, "bank_id": b_id, "status": status, "matching_rule": rule,
-            "score": round(score, 4), "reason": reason, "decision_source": source,
-            "model_used": model, "ai_reason": ai_reason, "original_score": round(orig_score if orig_score is not None else score, 4),
-        })
+        rec = ReconciliationRecord(
+            ledger_id=l_id, bank_id=b_id, status=status, matching_rule=rule,
+            score=score, reason=reason, decision_source=source, model_used=model,
+            ai_reason=ai_reason, original_score=orig_score if orig_score is not None else score,
+        )
+        matched_results.append(rec.to_dict())
         if l_id:
             assigned_ledger.add(l_id)
         if b_id and status == "MATCHED":
