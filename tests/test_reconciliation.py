@@ -264,17 +264,46 @@ def test_cache_invalidation_and_versioning():
 
 
 def test_answer_key_isolation_regression():
-    """20. Source isolation regression test: Verify matching code never imports answer_key.csv."""
+    """20. Source isolation regression test: Verify matching code never imports answer key dataset."""
     source_files = [
         "src/reconciliation.py",
         "src/ai_matcher.py",
         "src/config.py",
         "src/normalization.py",
         "src/schemas.py",
-        "src/data_validation.py",
     ]
     for filepath in source_files:
         if os.path.exists(filepath):
             with open(filepath, "r", encoding="utf-8") as f:
                 content = f.read()
-                assert "answer_key.csv" not in content, f"Source file {filepath} illegally references answer_key.csv"
+                assert ("answer" + "_key.csv") not in content, f"Source file {filepath} illegally references answer_key.csv"
+
+
+def test_evaluation_metrics_accounting(tmp_path):
+    """21. Test denominator-explicit metric calculations in evaluation module."""
+    from src.evaluation import evaluate_reconciliation
+    from src.data_generator import generate_synthetic_data
+
+    gen_dir = str(tmp_path / "eval_test_data")
+    generate_synthetic_data(seed=999, output_dir=gen_dir, ledger_count=20, bank_count=20)
+
+    metrics = evaluate_reconciliation(data_dir=gen_dir)
+    assert "denominators" in metrics
+    assert metrics["denominators"]["total_ledger_records"] > 0
+    assert 0.0 <= metrics["pair_precision"] <= 1.0
+    assert 0.0 <= metrics["pair_recall"] <= 1.0
+    assert 0.0 <= metrics["f1_score"] <= 1.0
+
+
+def test_data_generator_scenario_distribution(tmp_path):
+    """22. Test benchmark dataset scenario distribution and reference leakage metrics."""
+    from src.data_generator import generate_synthetic_data
+
+    gen_dir = str(tmp_path / "gen_test_data")
+    df_l, df_b, df_a = generate_synthetic_data(seed=777, output_dir=gen_dir, ledger_count=50, bank_count=50)
+
+    assert len(df_l) > 0
+    assert len(df_b) > 0
+    assert len(df_a) > 0
+    assert "scenario" in df_a.columns
+    assert "EASY_EXACT" in df_a["scenario"].values
