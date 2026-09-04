@@ -14,6 +14,7 @@ from src.config import CONFIG, ReconciliationConfig
 from src.data_validation import validate_ledger_schema, validate_bank_schema, validate_custom_data_paths
 from src.reconciliation import reconcile
 from src.services.finance_controller import process_batch
+from src.agent import ReconciliationAgent, ActionType
 
 app = FastAPI(
     title="LedgerLens API",
@@ -226,3 +227,102 @@ def get_reconciliation_run(run_id: str = "latest"):
     if run_id not in _RUN_CACHE:
         raise HTTPException(status_code=404, detail=f"Reconciliation run '{run_id}' not found.")
     return _RUN_CACHE[run_id]
+
+
+# ---------------------------------------------------------------------------
+# Bounded Agent Workflow Endpoints
+# ---------------------------------------------------------------------------
+
+_ACTIVE_AGENT: Optional[ReconciliationAgent] = None
+
+
+@app.post("/api/v1/agent/run")
+def run_agent_endpoint(
+    use_custom_data: bool = Query(False, description="Use custom XLSX datasets if available"),
+):
+    """Execute bounded ReconciliationAgent pipeline across input datasets."""
+    global _ACTIVE_AGENT
+    custom_dir = CONFIG.LEDGERLENS_CUSTOM_DATA_DIR
+    ledger_xlsx = os.path.join(custom_dir, "ledger.xlsx")
+    bank_xlsx = os.path.join(custom_dir, "bank_statement.xlsx")
+
+    if use_custom_data and os.path.exists(ledger_xlsx) and os.path.exists(bank_xlsx):
+        df_ledger = pd.read_excel(ledger_xlsx, engine="openpyxl")
+        df_bank = pd.read_excel(bank_xlsx, engine="openpyxl")
+    else:
+        ledger_csv = os.path.join("data", "ledger.csv")
+        bank_csv = os.path.join("data", "bank_statement.csv")
+        if not (os.path.exists(ledger_csv) and os.path.exists(bank_csv)):
+            raise HTTPException(status_code=404, detail="Default dataset missing. Generate dataset first or upload custom files.")
+        df_ledger = pd.read_csv(ledger_csv)
+        df_bank = pd.read_csv(bank_csv)
+
+    agent = ReconciliationAgent()
+    try:
+        summary = agent.observe_and_reconcile(df_ledger, df_bank)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Agent pipeline error: {str(e)}")
+
+    _ACTIVE_AGENT = agent
+    return summary.to_dict()
+
+
+@app.get("/api/v1/cases")
+def list_cases_endpoint():
+    """List all active reconciliation cases and their current states."""
+    if _ACTIVE_AGENT is None:
+        raise HTTPException(status_code=404, detail="No agent run found in memory. Call POST /api/v1/agent/run first.")
+    return {
+        "case_count": len(_ACTIVE_AGENT.cases),
+        "cases": [c.to_dict() for c in _ACTIVE_AGENT.cases.values()],
+    }
+
+
+@app.get("/api/v1/cases/{case_id}")
+def get_case_endpoint(case_id: str):
+    """Retrieve single case details, investigation, policy verdict, and audit history."""
+    if _ACTIVE_AGENT is None or case_id not in _ACTIVE_AGENT.cases:
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found.")
+    return _ACTIVE_AGENT.cases[case_id].to_dict()
+
+
+@app.post("/api/v1/cases/{case_id}/approve")
+def approve_case_action_endpoint(case_id: str):
+    """Approve pending action for a case and execute action handler + verification loop."""
+    if _ACTIVE_AGENT is None or case_id not in _ACTIVE_AGENT.cases:
+        raise HTTPException(status_code=404, detail=f"Case '{case_id}' not found.")
+
+    case = _ACTIVE_AGENT.cases[case_id]
+    if not case.policy_decision:
+        raise HTTPException(status_code=400, detail="Case has no policy decision.")
+
+    action_type = case.policy_decision.action_type
+    exec_res, verif_res = _ACTIVE_AGENT.action_service.execute_and_verify(
+        case, action_type=action_type
+    )
+    return {
+        "status": "success",
+        "case": case.to_dict(),
+        "execution": exec_res.to_dict(),
+        "verification": verif_res.to_dict(),
+    }
+
+
+@app.get("/api/v1/audit")
+def get_audit_trail_endpoint():
+    """Retrieve append-only audit trail logs from the active agent run."""
+    if _ACTIVE_AGENT is None:
+        raise HTTPException(status_code=404, detail="No agent run found in memory. Call POST /api/v1/agent/run first.")
+
+    events = []
+    for c in _ACTIVE_AGENT.cases.values():
+        for evt in c.audit_history:
+            events.append(evt.to_dict())
+
+    # Sort chronologically
+    events.sort(key=lambda x: x.get("timestamp", ""))
+    return {
+        "event_count": len(events),
+        "audit_events": events,
+    }
+

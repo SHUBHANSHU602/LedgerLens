@@ -26,21 +26,22 @@ LedgerLens solves financial reconciliation through a multi-tier pipeline:
 
 ```mermaid
 graph TD
-    A[Data Sources: Ledger / Razorpay / Bank Statement] --> B[Data Ingestion & Normalization]
-    B --> C[Schema Validation]
-    C --> D[Multi-Tier Deterministic Matching Engine]
-    D --> E{Confidence & Ambiguity Evaluator}
-    E -- "Score >= 0.82 (High Confidence)" --> F[MATCHED]
-    E -- "0.45 <= Score < 0.82 (Ambiguous)" --> G[Bounded Groq AI Assistance]
-    E -- "Score < 0.45 (Low Confidence)" --> H[UNMATCHED]
-    G -- "AI Match + Safety Vetoes Passed" --> F
-    G -- "Veto Failed / Hallucination / Error" --> I[REVIEW]
-    F --> J[Global One-to-One Conflict Resolution]
-    I --> J
-    H --> J
-    J --> K[Finance Controller Exception Classifier]
-    K --> L[Observable REST API & Streamlit Dashboard]
+    A[Data Sources: Ledger / Razorpay / Bank Statement] --> B[1. OBSERVE & INGEST]
+    B --> C[2. NORMALIZE & VALIDATE]
+    C --> D[3. RECONCILE: Multi-Tier Engine]
+    D --> E{Deterministic Match Status?}
+    E -- "High Confidence MATCHED" --> F[4. POLICY ENGINE Check]
+    E -- "Ambiguous / Review Exception" --> G[5. EXCEPTION INVESTIGATOR Agent]
+    E -- "UNMATCHED Record" --> F
+    G --> H[6. STRUCTURED RECOMMENDATION]
+    H --> F
+    F -- "Low-Risk Auto-Allowed" --> I[7. ACTION SERVICE Execution]
+    F -- "High-Risk / Human Required" --> J[8. ACTION_PENDING_APPROVAL Human Review]
+    I --> K[9. VERIFICATION LOOP]
+    J -- "Human Approved" --> I
+    K -- "Outcome Verified" --> L[10. APPEND-ONLY AUDIT LOG & State Update]
 ```
+
 
 
 ---

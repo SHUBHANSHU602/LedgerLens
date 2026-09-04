@@ -9,12 +9,15 @@ try:
     from src.config import ReconciliationConfig, CONFIG
     from src.reconciliation import reconcile
     from src.evaluation import evaluate_reconciliation
+    from src.agent import ReconciliationAgent
 except ModuleNotFoundError:
     import sys
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
     from src.config import ReconciliationConfig, CONFIG
     from src.reconciliation import reconcile
     from src.evaluation import evaluate_reconciliation
+    from src.agent import ReconciliationAgent
+
 
 # -----------------------------------------------------------------------------
 # 1. Page Configuration & Aesthetic Styling
@@ -206,8 +209,8 @@ if "reconciled_results" in st.session_state:
     # 6. Detailed Results Tabs & Exception-First View
     # -------------------------------------------------------------------------
 
-    tab_exceptions, tab_matched, tab_review, tab_unmatched, tab_eval = st.tabs([
-        "🔍 Exception Summary", "✅ Matched", "⚠️ Review Required", "❌ Unmatched", "🎯 Benchmark"
+    tab_exceptions, tab_agent, tab_matched, tab_review, tab_unmatched, tab_eval = st.tabs([
+        "🔍 Exception Summary", "🤖 Agent Activity & Trace", "✅ Matched", "⚠️ Review Required", "❌ Unmatched", "🎯 Benchmark"
     ])
 
     cols_to_show = ["ledger_id", "bank_id", "status", "matching_rule", "score", "reason", "decision_source", "model_used"]
@@ -232,6 +235,36 @@ if "reconciled_results" in st.session_state:
             st.dataframe(df_exc[exc_exist + ["action"]], use_container_width=True, hide_index=True)
         else:
             st.success("No exceptions — all transactions reconciled successfully!")
+
+    with tab_agent:
+        st.markdown("### 🤖 Bounded Financial Reconciliation Agent Workflow")
+        st.markdown("`OBSERVE → NORMALIZE → RECONCILE → INVESTIGATE → POLICY CHECK → ACT → VERIFY → AUDIT`")
+
+        if st.button("▶ Run Agent Workflow", type="secondary"):
+            with st.spinner("Executing Bounded Agent Loop..."):
+                agent_inst = ReconciliationAgent()
+                summary_inst = agent_inst.observe_and_reconcile(df_ledger, df_bank)
+                st.session_state["agent_summary"] = summary_inst
+
+        if "agent_summary" in st.session_state:
+            ag_sum = st.session_state["agent_summary"]
+            ac1, ac2, ac3, ac4, ac5 = st.columns(5)
+            ac1.metric("Agent Cases", ag_sum.total_cases)
+            ac2.metric("Resolved", ag_sum.resolved_count, f"Auto: {ag_sum.auto_resolved_count}")
+            ac3.metric("Fee Adjustments", ag_sum.fee_adjusted_count)
+            ac4.metric("Pending Approval", ag_sum.pending_approval_count)
+            ac5.metric("Verification Rate", f"{ag_sum.verification_pass_rate*100:.1f}%")
+
+            st.markdown(ag_sum.summary_markdown)
+
+            if ag_sum.cases:
+                st.markdown("#### 📋 Agent Case Registry")
+                df_cases = pd.DataFrame(ag_sum.cases)
+                show_c_cols = ["case_id", "ledger_id", "bank_id", "state", "status", "exception_type", "score"]
+                exist_c_cols = [c for c in show_c_cols if c in df_cases.columns]
+                st.dataframe(df_cases[exist_c_cols], use_container_width=True, hide_index=True)
+        else:
+            st.info("Click **'Run Agent Workflow'** above to view the case intelligence and audit trail.")
 
     with tab_matched:
         df_m = results[results["status"] == "MATCHED"]
@@ -265,3 +298,4 @@ if "reconciled_results" in st.session_state:
         mime="text/csv",
         use_container_width=True,
     )
+
