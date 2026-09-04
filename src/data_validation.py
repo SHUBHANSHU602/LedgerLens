@@ -125,6 +125,23 @@ def audit_dataset_and_repo(data_dir: str = "data") -> Dict[str, Any]:
     exact_ref_matches = len(df_results[df_results["matching_rule"] == "EXACT_REFERENCE"])
     ai_calls_count = len(df_results[df_results["decision_source"] == "groq"])
 
+    # Unique Amount + Date matchability analysis
+    unique_amt_date_count = 0
+    multi_amt_date_count = 0
+    no_amt_date_count = 0
+    total_ledger = len(df_ledger)
+
+    for _, l_row in df_ledger.iterrows():
+        l_amt = float(l_row.get("amount", 0.0))
+        l_date = str(l_row.get("order_date", ""))
+        matches = df_bank[(df_bank["credited_amount"] == l_amt) & (df_bank["value_date"] == l_date)]
+        if len(matches) == 1:
+            unique_amt_date_count += 1
+        elif len(matches) > 1:
+            multi_amt_date_count += 1
+        else:
+            no_amt_date_count += 1
+
     audit_summary = {
         "1_answer_key_isolation": iso_audit["answer_key_isolation_passed"],
         "2_deterministic_id_leakage": {
@@ -146,6 +163,11 @@ def audit_dataset_and_repo(data_dir: str = "data") -> Dict[str, Any]:
         "14_transactions_requiring_ai": ai_calls_count,
         "15_rows_with_no_candidate": no_cand_count,
         "16_rows_with_multiple_candidates": multi_cand_count,
+        "17_amount_date_matchability": {
+            "pct_unique_amount_date_matchable": round(unique_amt_date_count / total_ledger, 4) if total_ledger > 0 else 0.0,
+            "pct_multiple_amount_date_candidates": round(multi_amt_date_count / total_ledger, 4) if total_ledger > 0 else 0.0,
+            "pct_no_amount_date_candidate": round(no_amt_date_count / total_ledger, 4) if total_ledger > 0 else 0.0,
+        },
     }
 
     return audit_summary

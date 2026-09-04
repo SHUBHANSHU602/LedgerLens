@@ -20,7 +20,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
-_LAST_RUN_CACHE: Dict[str, Any] = {}
+_RUN_CACHE: Dict[str, Dict[str, Any]] = {}
 
 
 @app.get("/health")
@@ -144,35 +144,79 @@ def run_reconciliation_endpoint(
 
     traces = []
     for idx, row in df_results.iterrows():
+        ai_invoked = (row.get("decision_source", "") == "groq") or bool(row.get("ai_reason", ""))
+        ai_reason_text = str(row.get("ai_reason", ""))
+        status_val = str(row.get("status", ""))
+        matching_rule = str(row.get("matching_rule", ""))
+        rule_reason = str(row.get("reason", ""))
+        amt_diff = float(row.get("amount_difference", 0.0))
+
+        if not ai_invoked:
+            ai_validation_result = "not_invoked"
+        elif "VETO" in ai_reason_text or "vetoed" in ai_reason_text.lower():
+            ai_validation_result = "vetoed"
+        elif status_val == "MATCHED":
+            ai_validation_result = "passed"
+        else:
+            ai_validation_result = "review_suggested"
+
+        if "VETO: AI bank ID" in ai_reason_text or "hallucinated" in ai_reason_text.lower():
+            candidate_id_check = "failed_hallucinated_id"
+        else:
+            candidate_id_check = "passed"
+
+        currency_safety_check = "failed" if (matching_rule == "CURRENCY_MISMATCH" or "Currency mismatch" in rule_reason) else "passed"
+        amount_safety_check = "passed" if currency_safety_check == "passed" and amt_diff <= 500.0 else "failed"
+        one_to_one_check = "conflict_downgraded" if (matching_rule == "ONE_TO_ONE_CONFLICT" or "One-to-one conflict" in rule_reason) else "passed"
+
+        all_checks_passed = (
+            candidate_id_check == "passed" and
+            amount_safety_check == "passed" and
+            currency_safety_check == "passed" and
+            one_to_one_check == "passed"
+        )
+        hard_safety_checks_summary = "passed" if all_checks_passed else "flagged"
+
         traces.append({
             "ledger_id": row.get("ledger_id", ""),
             "bank_id": row.get("bank_id", ""),
-            "status": row.get("status", ""),
-            "matching_rule": row.get("matching_rule", ""),
+            "status": status_val,
+            "matching_rule": matching_rule,
             "score": row.get("score", 0.0),
-            "reason": row.get("reason", ""),
+            "reason": rule_reason,
             "decision_source": row.get("decision_source", "deterministic"),
-            "ai_invoked": str(row.get("decision_source", "")).lower() == "groq",
-            "ai_result_summary": row.get("ai_reason", ""),
-            "ai_validation_result": "passed" if row.get("decision_source", "") == "groq" else "skipped",
-            "hard_safety_checks": "passed",
+            "ai_invoked": ai_invoked,
+            "ai_result_summary": ai_reason_text if ai_invoked else "N/A",
+            "ai_validation_result": ai_validation_result,
+            "hard_safety_checks": hard_safety_checks_summary,
+            "candidate_id_check": candidate_id_check,
+            "amount_safety_check": amount_safety_check,
+            "currency_safety_check": currency_safety_check,
+            "one_to_one_check": one_to_one_check,
+            "final_decision": status_val,
             "candidate_count": row.get("candidate_count", 0),
             "candidate_rank": row.get("candidate_rank", 1),
-            "amount_difference": row.get("amount_difference", 0.0),
+            "amount_difference": amt_diff,
             "date_difference": row.get("date_difference", 0),
         })
 
     if debug_mode:
         response_data["traces"] = traces
 
-    _LAST_RUN_CACHE["last_run"] = response_data
-    _LAST_RUN_CACHE["last_traces"] = traces
+    _RUN_CACHE[run_id] = response_data
+    _RUN_CACHE["latest"] = response_data
     return response_data
 
 
 @app.get("/api/v1/reconcile/")
-def get_latest_reconciliation_run():
-    """Retrieve the latest reconciliation run summary and traces."""
-    if "last_run" not in _LAST_RUN_CACHE:
-        raise HTTPException(status_code=404, detail="No reconciliation run found in memory cache. Execute POST /api/v1/reconcile first.")
-    return _LAST_RUN_CACHE["last_run"]
+@app.get("/api/v1/reconcile/{run_id}")
+def get_reconciliation_run(run_id: str = "latest"):
+    """Retrieve reconciliation run summary and traces by run_id or 'latest'."""
+    if not run_id or run_id in ("latest", ""):
+        if "latest" not in _RUN_CACHE:
+            raise HTTPException(status_code=404, detail="No reconciliation run found in memory cache. Execute POST /api/v1/reconcile first.")
+        return _RUN_CACHE["latest"]
+
+    if run_id not in _RUN_CACHE:
+        raise HTTPException(status_code=404, detail=f"Reconciliation run '{run_id}' not found.")
+    return _RUN_CACHE[run_id]

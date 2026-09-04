@@ -99,10 +99,10 @@ def evaluate_ambiguous_record(
         same_tx, selected_id = parsed.same_transaction, parsed.selected_bank_id
 
         if same_tx:
-            if selected_id and selected_id not in valid_candidate_ids:
+            if not selected_id:
+                same_tx, selected_id, reason_msg = False, "", "AI decision vetoed: same_transaction is true but selected_bank_id is missing."
+            elif selected_id not in valid_candidate_ids:
                 same_tx, selected_id, reason_msg = False, "", f"AI decision vetoed: hallucinated bank ID '{selected_id}' not in candidate pool."
-            elif not selected_id and valid_candidate_ids:
-                selected_id, reason_msg = valid_candidate_ids[0], parsed.reason or "AI confirmed match."
             else:
                 reason_msg = parsed.reason or "AI confirmed match."
         else:

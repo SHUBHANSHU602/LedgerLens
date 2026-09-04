@@ -59,9 +59,15 @@ Scanning all source code modules in `src/` to prove that matching core modules N
 | `REVERSAL_ADJUSTMENT` | 6 | 2.5% | Chargeback adjustments |
 | `FEE_ONLY_SETTLEMENT` | 4 | 1.7% | Explicit settlement fee entries |
 
+### Amount & Date Matchability Audit (17-Point Audit Metric 17)
+
+- **Unique Amount + Date Matchable**: `49.33%` (111 / 225 ledger records uniquely match 1 bank record on amount + date)
+- **Multiple Amount + Date Candidates**: `22.22%` (50 / 225 ledger records match multiple bank candidate records on amount + date)
+- **No Amount + Date Candidate**: `28.44%` (64 / 225 ledger records have no matching bank candidate on exact amount + date)
+
 ---
 
-## 4. Static Code Cleanliness Audit
+## 4. Static Code Cleanliness & AI Safety Audit
 
 ### Findings Matrix
 
@@ -72,6 +78,8 @@ Scanning all source code modules in `src/` to prove that matching core modules N
 3. **Hard-Coded API Keys / Secrets**: **0** found. `GROQ_API_KEY` is loaded strictly via `os.getenv("GROQ_API_KEY")`.
 4. **Secrets in Git**: `.env` is listed in `.gitignore`. `.env.example` contains mock placeholders.
 5. **Bare `except:` blocks**: **0** bare excepts found. All exception handlers use typed `except Exception as e:` with safe fallback routines.
+6. **Strict AI Safety Veto**: Missing `selected_bank_id` when `same_transaction=true` strictly vetoes match to `REVIEW`. Hallucinated bank IDs vetoed.
+7. **Truthful API Observability**: Debug traces report explicit safety check outcomes (`hard_safety_checks`, `candidate_id_check`, `amount_safety_check`, `currency_safety_check`, `one_to_one_check`).
 
 ---
 
