@@ -15,7 +15,7 @@ def validate_ledger_schema(
     df: pd.DataFrame,
     config: ReconciliationConfig = CONFIG,
 ) -> Tuple[bool, List[str]]:
-    """Validate ledger DataFrame schema and completeness."""
+    """Validate ledger DataFrame schema, data types, and non-empty/duplicate IDs."""
     errors = []
     if df is None:
         return False, ["Ledger dataset is None."]
@@ -23,6 +23,32 @@ def validate_ledger_schema(
     missing_cols = [c for c in ["order_id", "amount", "order_date"] if c not in df.columns]
     if missing_cols:
         errors.append(f"Ledger missing required schema columns: {missing_cols}")
+        return False, errors
+
+    if df.empty:
+        return True, []
+
+    # Non-empty order_id check
+    null_ids = df["order_id"].isna().sum() + (df["order_id"].astype(str).str.strip() == "").sum()
+    if null_ids > 0:
+        errors.append(f"Ledger contains {null_ids} missing/empty order_id record(s).")
+
+    # Duplicate order_id check
+    dup_ids = df[df["order_id"].notna()]["order_id"].duplicated().sum()
+    if dup_ids > 0:
+        errors.append(f"Ledger contains {dup_ids} duplicate order_id record(s).")
+
+    # Numeric amount check
+    try:
+        pd.to_numeric(df["amount"].dropna(), errors="raise")
+    except Exception:
+        errors.append("Ledger contains unparseable non-numeric amount value(s).")
+
+    # Valid date check
+    try:
+        pd.to_datetime(df["order_date"].dropna(), errors="raise")
+    except Exception:
+        errors.append("Ledger contains unparseable order_date value(s).")
 
     return len(errors) == 0, errors
 
@@ -31,7 +57,7 @@ def validate_bank_schema(
     df: pd.DataFrame,
     config: ReconciliationConfig = CONFIG,
 ) -> Tuple[bool, List[str]]:
-    """Validate bank statement DataFrame schema and completeness."""
+    """Validate bank statement DataFrame schema, data types, and non-empty/duplicate UTR references."""
     errors = []
     if df is None:
         return False, ["Bank statement dataset is None."]
@@ -39,6 +65,32 @@ def validate_bank_schema(
     missing_cols = [c for c in ["utr_reference", "credited_amount", "value_date"] if c not in df.columns]
     if missing_cols:
         errors.append(f"Bank statement missing required schema columns: {missing_cols}")
+        return False, errors
+
+    if df.empty:
+        return True, []
+
+    # Non-empty UTR reference check
+    null_refs = df["utr_reference"].isna().sum() + (df["utr_reference"].astype(str).str.strip() == "").sum()
+    if null_refs > 0:
+        errors.append(f"Bank statement contains {null_refs} missing/empty utr_reference record(s).")
+
+    # Duplicate utr_reference check
+    dup_refs = df[df["utr_reference"].notna()]["utr_reference"].duplicated().sum()
+    if dup_refs > 0:
+        errors.append(f"Bank statement contains {dup_refs} duplicate utr_reference record(s).")
+
+    # Numeric credited amount check
+    try:
+        pd.to_numeric(df["credited_amount"].dropna(), errors="raise")
+    except Exception:
+        errors.append("Bank statement contains unparseable non-numeric credited_amount value(s).")
+
+    # Valid date check
+    try:
+        pd.to_datetime(df["value_date"].dropna(), errors="raise")
+    except Exception:
+        errors.append("Bank statement contains unparseable value_date value(s).")
 
     return len(errors) == 0, errors
 

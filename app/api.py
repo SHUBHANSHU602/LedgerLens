@@ -77,9 +77,8 @@ async def upload_custom_data(
     try:
         with pd.ExcelWriter(target_path, engine="openpyxl") as writer:
             df.to_excel(writer, sheet_name="Data", index=False)
-    except Exception:
-        target_path = os.path.join(custom_dir, target_filename.replace(".xlsx", ".csv"))
-        df.to_csv(target_path, index=False)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to save custom dataset as XLSX: {str(exc)}")
 
     return {
         "status": "success",
@@ -192,6 +191,8 @@ def run_reconciliation_endpoint(
             "candidate_id_check": candidate_id_check,
             "amount_safety_check": amount_safety_check,
             "currency_safety_check": currency_safety_check,
+            "amount_check": amount_safety_check,
+            "currency_check": currency_safety_check,
             "one_to_one_check": one_to_one_check,
             "final_decision": status_val,
             "candidate_count": row.get("candidate_count", 0),

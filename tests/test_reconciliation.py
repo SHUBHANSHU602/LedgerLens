@@ -149,6 +149,7 @@ def test_unmatched_bank():
 @patch("groq.Groq")
 def test_wrong_ai_bank_id_veto(mock_groq_cls, mock_getenv):
     """11. Test deterministic veto when AI returns a hallucinated bank ID outside candidate pool."""
+    clear_ai_cache()
     mock_client = MagicMock()
     mock_groq_cls.return_value = mock_client
     mock_response = MagicMock()
@@ -167,6 +168,7 @@ def test_wrong_ai_bank_id_veto(mock_groq_cls, mock_getenv):
 @patch("groq.Groq")
 def test_malformed_ai_json(mock_groq_cls, mock_getenv):
     """12. Test safe fallback when AI returns malformed JSON."""
+    clear_ai_cache()
     mock_client = MagicMock()
     mock_groq_cls.return_value = mock_client
     mock_response = MagicMock()
@@ -307,3 +309,39 @@ def test_data_generator_scenario_distribution(tmp_path):
     assert len(df_a) > 0
     assert "scenario" in df_a.columns
     assert "EASY_EXACT" in df_a["scenario"].values
+
+
+@patch("src.ai_matcher.os.getenv", return_value="mock_groq_api_key")
+@patch("groq.Groq")
+def test_ai_missing_selected_bank_id_veto(mock_groq_cls, mock_getenv):
+    """23. Test veto when AI says same_transaction=true but selected_bank_id is missing/empty."""
+    mock_client = MagicMock()
+    mock_groq_cls.return_value = mock_client
+    mock_response = MagicMock()
+    mock_response.choices[0].message.content = '{"same_transaction": true, "selected_bank_id": "", "reason": "Missing ID"}'
+    mock_client.chat.completions.create.return_value = mock_response
+
+    df_ledger = pd.DataFrame([{"order_id": "ORD-5009", "customer_name": "Cust E", "amount": 5000.0, "currency": "INR", "order_date": "2026-08-03", "payment_method": "NEFT"}])
+    df_bank = pd.DataFrame([{"utr_reference": "UTR5009", "narration_text": "NET SETTLEMENT ORD-5009", "credited_amount": 4950.0, "currency": "INR", "value_date": "2026-08-03", "deduction_fee": 50.0}])
+
+    res = reconcile(df_ledger, df_bank)
+    row = res.iloc[0]
+    assert row["status"] == "REVIEW"
+    assert "missing" in row["ai_reason"].lower()
+
+
+def test_amount_date_matchability_metric(tmp_path):
+    """24. Test Metric 17 amount and date matchability audit output."""
+    from src.data_validation import audit_dataset_and_repo
+    from src.data_generator import generate_synthetic_data
+
+    gen_dir = str(tmp_path / "matchability_test_data")
+    generate_synthetic_data(seed=123, output_dir=gen_dir, ledger_count=30, bank_count=30)
+
+    report = audit_dataset_and_repo(data_dir=gen_dir)
+    assert "17_amount_date_matchability" in report
+    matchability = report["17_amount_date_matchability"]
+    assert "pct_unique_amount_date_matchable" in matchability
+    assert "pct_multiple_amount_date_candidates" in matchability
+    assert "pct_no_amount_date_candidate" in matchability
+    assert 0.0 <= matchability["pct_unique_amount_date_matchable"] <= 1.0

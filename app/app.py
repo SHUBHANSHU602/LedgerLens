@@ -68,9 +68,9 @@ st.markdown('<div class="sub-header">Multi-Tier Deterministic & Bounded Groq AI 
 
 col_u1, col_u2 = st.columns(2)
 with col_u1:
-    ledger_file = st.file_uploader("Upload Internal Ledger CSV", type=["csv"])
+    ledger_file = st.file_uploader("Upload Internal Ledger (CSV or XLSX)", type=["csv", "xlsx"])
 with col_u2:
-    bank_file = st.file_uploader("Upload Bank Statement CSV", type=["csv"])
+    bank_file = st.file_uploader("Upload Bank Statement (CSV or XLSX)", type=["csv", "xlsx"])
 
 # -----------------------------------------------------------------------------
 # 4. Data Loading & Schema Validation
@@ -81,10 +81,17 @@ use_sample = st.button("📁 Load Sample Datasets from data/", use_container_wid
 
 if ledger_file and bank_file:
     try:
-        df_ledger = pd.read_csv(ledger_file)
-        df_bank = pd.read_csv(bank_file)
+        if ledger_file.name.endswith(".xlsx"):
+            df_ledger = pd.read_excel(ledger_file, engine="openpyxl")
+        else:
+            df_ledger = pd.read_csv(ledger_file)
+
+        if bank_file.name.endswith(".xlsx"):
+            df_bank = pd.read_excel(bank_file, engine="openpyxl")
+        else:
+            df_bank = pd.read_csv(bank_file)
     except Exception as err:
-        st.error(f"Error reading uploaded CSV files: {err}")
+        st.error(f"Error reading uploaded CSV/XLSX files: {err}")
 elif use_sample or (os.path.exists("data/ledger.csv") and os.path.exists("data/bank_statement.csv") and not ledger_file and not bank_file):
     if os.path.exists("data/ledger.csv") and os.path.exists("data/bank_statement.csv"):
         df_ledger = pd.read_csv("data/ledger.csv")
@@ -94,7 +101,7 @@ elif use_sample or (os.path.exists("data/ledger.csv") and os.path.exists("data/b
 def validate_datasets(df_l: pd.DataFrame, df_b: pd.DataFrame) -> bool:
     """Validate non-empty datasets and required schema columns."""
     if df_l is None or df_b is None:
-        st.warning("Please upload both Ledger CSV and Bank Statement CSV files.")
+        st.warning("Please upload both Ledger and Bank Statement files.")
         return False
     if df_l.empty:
         st.error("Validation Error: Ledger dataset is empty.")
@@ -107,10 +114,10 @@ def validate_datasets(df_l: pd.DataFrame, df_b: pd.DataFrame) -> bool:
     missing_b = [c for c in ["utr_reference", "credited_amount", "value_date"] if c not in df_b.columns]
 
     if missing_l:
-        st.error(f"Validation Error: Ledger CSV missing required columns: {missing_l}")
+        st.error(f"Validation Error: Ledger CSV/XLSX missing required columns: {missing_l}")
         return False
     if missing_b:
-        st.error(f"Validation Error: Bank Statement CSV missing required columns: {missing_b}")
+        st.error(f"Validation Error: Bank Statement CSV/XLSX missing required columns: {missing_b}")
         return False
 
     return True
@@ -130,8 +137,8 @@ if validate_datasets(df_ledger, df_bank):
                 try:
                     eval_metrics = evaluate_reconciliation("data")
                     st.session_state["eval_metrics"] = eval_metrics
-                except Exception:
-                    pass
+                except Exception as eval_err:
+                    st.warning(f"Ground truth evaluation notice: {eval_err}")
 
 if "reconciled_results" in st.session_state:
     results = st.session_state["reconciled_results"]

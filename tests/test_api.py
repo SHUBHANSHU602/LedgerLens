@@ -139,6 +139,24 @@ def test_get_latest_reconciliation():
     assert "run_id" in data
 
 
+def test_unknown_run_id_returns_404():
+    """Test GET /api/v1/reconcile/{run_id} returns HTTP 404 for unknown run_id."""
+    response = client.get("/api/v1/reconcile/RUN-UNKNOWN-9999")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+def test_invalid_xlsx_upload():
+    """Test POST /api/v1/custom-data/upload with invalid/corrupted XLSX file returns HTTP 400."""
+    response = client.post(
+        "/api/v1/custom-data/upload",
+        data={"file_type": "ledger"},
+        files={"file": ("corrupted.xlsx", b"NOT AN XLSX FILE CONTENT", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    assert response.status_code == 400
+    assert "Failed to parse" in response.json()["detail"]
+
+
 def test_answer_key_isolation_in_api():
     """Verify app/api.py never imports or reads answer key dataset."""
     api_path = os.path.join("app", "api.py")
