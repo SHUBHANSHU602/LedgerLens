@@ -1,29 +1,49 @@
-"""Evaluation module for financial reconciliation engine against canonical ground truth (Phase 3)."""
+"""Evaluation module for financial reconciliation engine against canonical ground truth."""
 
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import pandas as pd
 
 try:
     from src.reconciliation import reconcile
+    from src.config import ReconciliationConfig, CONFIG
 except ModuleNotFoundError:
     from reconciliation import reconcile
+    from config import ReconciliationConfig, CONFIG
 
 
-def evaluate_reconciliation(data_dir: str = "data") -> Dict[str, Any]:
-    """Evaluate reconciliation results against answer_key.csv with denominator-explicit metrics."""
+def evaluate_reconciliation(
+    data_dir: str = "data",
+    config: Optional[ReconciliationConfig] = None,
+    precomputed_results: Optional[pd.DataFrame] = None,
+) -> Dict[str, Any]:
+    """Evaluate reconciliation results against answer_key.csv with denominator-explicit metrics.
+
+    Args:
+        data_dir: Directory containing ledger.csv, bank_statement.csv, answer_key.csv.
+        config: ReconciliationConfig to use. If None, uses default CONFIG.
+        precomputed_results: If provided, skip reconciliation and evaluate these results directly.
+            This ensures evaluation uses the exact same dataset/config as the reconciliation run.
+    """
     ledger_path = os.path.join(data_dir, "ledger.csv")
     bank_path = os.path.join(data_dir, "bank_statement.csv")
     answer_path = os.path.join(data_dir, "answer_key.csv")
 
-    if not (os.path.exists(ledger_path) and os.path.exists(bank_path) and os.path.exists(answer_path)):
-        raise FileNotFoundError(f"Dataset CSVs missing in '{data_dir}/'. Run scripts/generate_dataset.py first.")
+    if not os.path.exists(answer_path):
+        raise FileNotFoundError(f"Answer key missing in '{data_dir}/'. Cannot evaluate without ground truth.")
 
-    df_ledger = pd.read_csv(ledger_path)
-    df_bank = pd.read_csv(bank_path)
     df_answer = pd.read_csv(answer_path)
 
-    df_results = reconcile(df_ledger, df_bank)
+    if precomputed_results is not None:
+        df_results = precomputed_results
+    else:
+        if not (os.path.exists(ledger_path) and os.path.exists(bank_path)):
+            raise FileNotFoundError(f"Dataset CSVs missing in '{data_dir}/'. Run scripts/generate_dataset.py first.")
+
+        df_ledger = pd.read_csv(ledger_path)
+        df_bank = pd.read_csv(bank_path)
+        use_config = config if config is not None else CONFIG
+        df_results = reconcile(df_ledger, df_bank, config=use_config)
 
     # Merge results on ledger_id / order_id
     merged = pd.merge(
@@ -35,12 +55,16 @@ def evaluate_reconciliation(data_dir: str = "data") -> Dict[str, Any]:
     )
 
     tp, fp, fn, tn = 0, 0, 0, 0
+    auto_tp, auto_fp = 0, 0  # Auto-resolution (deterministic MATCHED)
+    ai_tp, ai_fp = 0, 0  # AI-assisted matches
+    review_correct, review_total = 0, 0
     invalid_ai_selection_count = 0
     ai_assisted_examples: List[Dict[str, Any]] = []
 
     for idx, row in merged.iterrows():
         exp_status = str(row.get("expected_status", "UNMATCHED")).strip().upper()
         act_status = str(row.get("status", "UNMATCHED")).strip().upper()
+        decision_src = str(row.get("decision_source", "deterministic")).strip().lower()
 
         exp_utr = str(row.get("utr_reference", "")).strip() if pd.notna(row.get("utr_reference")) else ""
         act_utr = str(row.get("bank_id", "")).strip() if pd.notna(row.get("bank_id")) else ""
@@ -50,8 +74,21 @@ def evaluate_reconciliation(data_dir: str = "data") -> Dict[str, Any]:
         if act_status == "MATCHED":
             if exp_status == "MATCHED" and is_match_correct:
                 tp += 1
+                if decision_src == "groq":
+                    ai_tp += 1
+                else:
+                    auto_tp += 1
             else:
                 fp += 1
+                if decision_src == "groq":
+                    ai_fp += 1
+                else:
+                    auto_fp += 1
+        elif act_status == "REVIEW":
+            review_total += 1
+            # Review is correct if expected status is not MATCHED (i.e., it should have been escalated)
+            if exp_status != "MATCHED":
+                review_correct += 1
         else:
             if exp_status == "MATCHED":
                 fn += 1
@@ -59,7 +96,7 @@ def evaluate_reconciliation(data_dir: str = "data") -> Dict[str, Any]:
                 tn += 1
 
         # Check for invalid AI selection (AI picked a bank ID that was not correct)
-        if str(row.get("decision_source", "")).lower() == "groq":
+        if decision_src == "groq":
             if act_status == "MATCHED" and not is_match_correct:
                 invalid_ai_selection_count += 1
             ai_assisted_examples.append({
@@ -72,8 +109,8 @@ def evaluate_reconciliation(data_dir: str = "data") -> Dict[str, Any]:
                 "orig_score": row.get("original_score", 0.0),
             })
 
-    total_ledger = len(df_ledger)
-    total_bank = len(df_bank)
+    total_ledger = len(pd.read_csv(ledger_path)) if precomputed_results is not None and os.path.exists(ledger_path) else len(df_results[df_results["ledger_id"] != ""].drop_duplicates("ledger_id")) if precomputed_results is not None else len(pd.read_csv(ledger_path))
+    total_bank = len(pd.read_csv(bank_path)) if os.path.exists(bank_path) else 0
     total_results = len(df_results)
 
     ai_calls_count = len(df_results[df_results["decision_source"] == "groq"])
@@ -88,17 +125,36 @@ def evaluate_reconciliation(data_dir: str = "data") -> Dict[str, Any]:
 
     duplicate_assignments = len(df_results[df_results["matching_rule"] == "ONE_TO_ONE_CONFLICT"])
 
-    precision = round(tp / (tp + fp), 4) if (tp + fp) > 0 else 0.0
-    recall = round(tp / (tp + fn), 4) if (tp + fn) > 0 else 0.0
-    f1_score = round(2 * precision * recall / (precision + recall), 4) if (precision + recall) > 0 else 0.0
+    # Core pairing metrics
+    pair_precision = round(tp / (tp + fp), 4) if (tp + fp) > 0 else 0.0
+    pair_recall = round(tp / (tp + fn), 4) if (tp + fn) > 0 else 0.0
+    f1_score = round(2 * pair_precision * pair_recall / (pair_precision + pair_recall), 4) if (pair_precision + pair_recall) > 0 else 0.0
+
+    # Auto-resolution metrics (deterministic only)
+    auto_precision = round(auto_tp / (auto_tp + auto_fp), 4) if (auto_tp + auto_fp) > 0 else 0.0
+    auto_recall = round(auto_tp / (tp + fn), 4) if (tp + fn) > 0 else 0.0
+
+    # Review precision: fraction of REVIEW decisions that were correctly non-MATCHED
+    review_precision = round(review_correct / review_total, 4) if review_total > 0 else 0.0
+
+    # Exception recall: fraction of truly non-matchable records caught
+    expected_non_match = tn + fn  # Records that should NOT be MATCHED
+    exception_recall = round((tn + review_correct) / expected_non_match, 4) if expected_non_match > 0 else 0.0
 
     fpr = round(fp / (fp + tn), 4) if (fp + tn) > 0 else 0.0
     fnr = round(fn / (fn + tp), 4) if (fn + tp) > 0 else 0.0
 
+    # Coverage and rates
+    total_expected_matches = tp + fn
+    automated_coverage = round(matches_count / total_ledger, 4) if total_ledger > 0 else 0.0
     review_rate = round(reviews_count / total_ledger, 4) if total_ledger > 0 else 0.0
+    unmatched_rate = round(unmatched_ledger_count / total_ledger, 4) if total_ledger > 0 else 0.0
     deterministic_match_rate = round(deterministic_matched / total_ledger, 4) if total_ledger > 0 else 0.0
     ai_escalation_rate = round(ai_calls_count / total_ledger, 4) if total_ledger > 0 else 0.0
     ai_match_rate = round(ai_matched_count / ai_calls_count, 4) if ai_calls_count > 0 else 0.0
+
+    # Headline metric: precision at automated coverage
+    precision_at_coverage = f"{pair_precision*100:.1f}% precision at {automated_coverage*100:.1f}% automated coverage"
 
     metrics = {
         "denominators": {
@@ -106,12 +162,18 @@ def evaluate_reconciliation(data_dir: str = "data") -> Dict[str, Any]:
             "total_bank_records": total_bank,
             "total_results_rows": total_results,
         },
-        "pair_precision": precision,
-        "pair_recall": recall,
+        # Canonical metric keys
+        "pair_precision": pair_precision,
+        "pair_recall": pair_recall,
         "f1_score": f1_score,
+        "auto_resolution_precision": auto_precision,
+        "auto_resolution_recall": auto_recall,
+        "review_precision": review_precision,
+        "exception_recall": exception_recall,
         "false_positive_rate": fpr,
         "false_negative_rate": fnr,
         "confusion_matrix": {"TP": tp, "FP": fp, "FN": fn, "TN": tn},
+        "headline": precision_at_coverage,
         "status_counts": {
             "MATCHED": matches_count,
             "REVIEW": reviews_count,
@@ -119,7 +181,9 @@ def evaluate_reconciliation(data_dir: str = "data") -> Dict[str, Any]:
             "UNMATCHED_BANK": unmatched_bank_count,
         },
         "rates": {
+            "automated_coverage": automated_coverage,
             "review_rate": review_rate,
+            "unmatched_rate": unmatched_rate,
             "deterministic_match_rate": deterministic_match_rate,
             "ai_escalation_rate": ai_escalation_rate,
             "ai_match_rate": ai_match_rate,
@@ -137,13 +201,19 @@ def evaluate_reconciliation(data_dir: str = "data") -> Dict[str, Any]:
     print(f"Total Ledger Records : {total_ledger}")
     print(f"Total Bank Records   : {total_bank}")
     print("-" * 65)
-    print(f"Pair Precision       : {precision:.4f}  (TP / (TP + FP))")
-    print(f"Pair Recall          : {recall:.4f}  (TP / (TP + FN))")
-    print(f"F1 Score             : {f1_score:.4f}")
-    print(f"False Positive Rate  : {fpr:.4f}")
-    print(f"False Negative Rate  : {fnr:.4f}")
+    print(f">>> {precision_at_coverage} <<<")
     print("-" * 65)
-    print(f"Matches (MATCHED)    : {matches_count} ({matches_count/total_ledger*100:.1f}%)")
+    print(f"Pair Precision           : {pair_precision:.4f}  (TP / (TP + FP))")
+    print(f"Pair Recall              : {pair_recall:.4f}  (TP / (TP + FN))")
+    print(f"F1 Score                 : {f1_score:.4f}")
+    print(f"Auto-Resolution Precision: {auto_precision:.4f}")
+    print(f"Auto-Resolution Recall   : {auto_recall:.4f}")
+    print(f"Review Precision         : {review_precision:.4f}")
+    print(f"Exception Recall         : {exception_recall:.4f}")
+    print(f"False Positive Rate      : {fpr:.4f}")
+    print(f"False Negative Rate      : {fnr:.4f}")
+    print("-" * 65)
+    print(f"Matches (MATCHED)    : {matches_count} ({automated_coverage*100:.1f}%)")
     print(f"Reviews (REVIEW)     : {reviews_count} ({review_rate*100:.1f}%)")
     print(f"Unmatched Ledger     : {unmatched_ledger_count}")
     print(f"Unmatched Bank       : {unmatched_bank_count}")

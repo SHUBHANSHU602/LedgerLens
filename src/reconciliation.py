@@ -199,16 +199,18 @@ def reconcile(
 
             if is_ambiguous or (config.REVIEW_THRESHOLD <= top_score < config.HIGH_CONFIDENCE_THRESHOLD):
                 if config.ENABLE_AI_ASSIST and evaluate_ambiguous_record is not None:
-                    # Pass top 3 candidates to AI matcher
-                    ai_input_candidates = [(c[0], c[1], c[2], c[3]) for c in top_candidates]
+                    # Pass AI_CANDIDATE_LIMIT candidates to AI matcher (consistent with AI prompt)
+                    ai_candidates = top_candidates[:config.AI_CANDIDATE_LIMIT]
+                    ai_input_candidates = [(c[0], c[1], c[2], c[3]) for c in ai_candidates]
                     ai_eval = evaluate_ambiguous_record(l_row, ai_input_candidates, config)
                     ai_status = ai_eval.get("status", "REVIEW")
                     ai_reason = ai_eval.get("reason", "")
                     ai_model = ai_eval.get("model_used", "none")
                     sel_b_id = ai_eval.get("selected_bank_id") or top_b_id
 
-                    # Safety Veto: selected bank ID must be in candidate pool
-                    if sel_b_id not in [c[1] for c in top_candidates]:
+                    # Safety Veto: selected bank ID must be in the candidate set shown to AI
+                    ai_candidate_ids = [c[1] for c in ai_candidates]
+                    if sel_b_id not in ai_candidate_ids:
                         ai_status, sel_b_id, ai_reason = "REVIEW", top_b_id, f"VETO: AI bank ID '{sel_b_id}' not in candidate pool."
 
                     if ai_status == "MATCHED":

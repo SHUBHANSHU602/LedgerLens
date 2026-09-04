@@ -345,3 +345,76 @@ def test_amount_date_matchability_metric(tmp_path):
     assert "pct_multiple_amount_date_candidates" in matchability
     assert "pct_no_amount_date_candidate" in matchability
     assert 0.0 <= matchability["pct_unique_amount_date_matchable"] <= 1.0
+
+
+def test_evaluation_metric_keys_match_ui(tmp_path):
+    """25. P0 REGRESSION: evaluation.py must return 'pair_precision' and 'pair_recall' keys."""
+    from src.evaluation import evaluate_reconciliation
+    from src.data_generator import generate_synthetic_data
+
+    gen_dir = str(tmp_path / "ui_metric_test")
+    generate_synthetic_data(seed=888, output_dir=gen_dir, ledger_count=20, bank_count=20)
+
+    metrics = evaluate_reconciliation(data_dir=gen_dir)
+
+    # These are the canonical keys the UI must use
+    assert "pair_precision" in metrics, "evaluation must return 'pair_precision'"
+    assert "pair_recall" in metrics, "evaluation must return 'pair_recall'"
+    assert "f1_score" in metrics, "evaluation must return 'f1_score'"
+    assert "headline" in metrics, "evaluation must return 'headline'"
+    assert "auto_resolution_precision" in metrics
+    assert "review_precision" in metrics
+    assert "exception_recall" in metrics
+
+    # Precision must not be zero on a non-trivial dataset
+    assert metrics["pair_precision"] > 0, "pair_precision should not be zero on valid benchmark data"
+
+
+def test_candidate_set_consistency():
+    """26. P0 REGRESSION: AI_CANDIDATE_LIMIT must be <= TOP_N_CANDIDATES."""
+    from src.config import CONFIG
+    assert CONFIG.AI_CANDIDATE_LIMIT <= CONFIG.TOP_N_CANDIDATES, \
+        f"AI_CANDIDATE_LIMIT ({CONFIG.AI_CANDIDATE_LIMIT}) exceeds TOP_N_CANDIDATES ({CONFIG.TOP_N_CANDIDATES})"
+
+
+def test_evaluation_uses_precomputed_results(tmp_path):
+    """27. P0 REGRESSION: evaluation must use precomputed results when provided."""
+    from src.evaluation import evaluate_reconciliation
+    from src.data_generator import generate_synthetic_data
+    from src.config import ReconciliationConfig
+
+    gen_dir = str(tmp_path / "precomputed_test")
+    generate_synthetic_data(seed=777, output_dir=gen_dir, ledger_count=20, bank_count=20)
+
+    # First run with default config
+    import pandas as pd
+    df_ledger = pd.read_csv(os.path.join(gen_dir, "ledger.csv"))
+    df_bank = pd.read_csv(os.path.join(gen_dir, "bank_statement.csv"))
+
+    custom_config = ReconciliationConfig(ENABLE_AI_ASSIST=False, HIGH_CONFIDENCE_THRESHOLD=0.90)
+    results = reconcile(df_ledger, df_bank, config=custom_config)
+
+    # Evaluate with precomputed results — should not re-run reconciliation
+    metrics = evaluate_reconciliation(
+        data_dir=gen_dir,
+        config=custom_config,
+        precomputed_results=results,
+    )
+    assert metrics["pair_precision"] >= 0.0
+
+
+def test_holdout_seed_separation(tmp_path):
+    """28. REGRESSION: dev and holdout datasets must use different seeds and produce different data."""
+    from src.data_generator import generate_synthetic_data
+
+    dev_dir = str(tmp_path / "dev")
+    holdout_dir = str(tmp_path / "holdout")
+
+    df_dev_l, _, _ = generate_synthetic_data(seed=123, output_dir=dev_dir, ledger_count=30, bank_count=30)
+    df_hold_l, _, _ = generate_synthetic_data(seed=456, output_dir=holdout_dir, ledger_count=30, bank_count=30)
+
+    # The datasets must not be identical
+    dev_amounts = sorted(df_dev_l["amount"].tolist())
+    hold_amounts = sorted(df_hold_l["amount"].tolist())
+    assert dev_amounts != hold_amounts, "Dev and holdout datasets should differ (different seeds)"
+

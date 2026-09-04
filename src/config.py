@@ -17,6 +17,7 @@ class ReconciliationConfig:
     BROAD_AMOUNT_TOLERANCE_PCT: float = 0.05
     MAX_FEE_AMOUNT: float = 100.0
     TOP_N_CANDIDATES: int = 5
+    AI_CANDIDATE_LIMIT: int = 3  # Must be <= TOP_N_CANDIDATES; controls how many candidates are shown to AI
 
     # Evidence Weights for Phase 2 Scoring (Sum = 1.0)
     W_REF: float = 0.40

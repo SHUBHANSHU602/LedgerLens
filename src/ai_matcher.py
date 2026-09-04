@@ -79,7 +79,8 @@ def evaluate_ambiguous_record(
     ledger_summary = {"order_id": l_id, "customer_name": l_row.get("customer_name", ""), "amount": float(l_row.get("amount", 0.0)), "currency": l_row.get("currency", "INR"), "order_date": str(l_row.get("order_date", "")), "payment_method": l_row.get("payment_method", "")}
 
     bank_candidates = []
-    for score, b_id, b_row, breakdown in top_candidates[:3]:
+    ai_limit = config.AI_CANDIDATE_LIMIT
+    for score, b_id, b_row, breakdown in top_candidates[:ai_limit]:
         bank_candidates.append({"utr_reference": b_id, "narration_text": b_row.get("narration_text", ""), "credited_amount": float(b_row.get("credited_amount", 0.0)), "currency": b_row.get("currency", "INR"), "value_date": str(b_row.get("value_date", "")), "deduction_fee": float(b_row.get("deduction_fee", 0.0)), "deterministic_score": score, "score_breakdown": breakdown})
 
     prompt_messages = [

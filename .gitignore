@@ -8,3 +8,5 @@ __pycache__/
 *.log
 ~$*.xlsx
 *.tmp
+_throughput_tmp/
+data/_throughput_tmp/

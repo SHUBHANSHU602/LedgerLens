@@ -21,7 +21,7 @@ except ModuleNotFoundError:
 # -----------------------------------------------------------------------------
 
 st.set_page_config(
-    page_title="AI Financial Reconciliation Engine",
+    page_title="LedgerLens — AI Finance Controller",
     page_icon="⚖️",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -32,6 +32,7 @@ st.markdown(
     <style>
     .main-header { font-size: 2.2rem; font-weight: 700; color: #1E293B; margin-bottom: 0.2rem; }
     .sub-header { font-size: 1.0rem; color: #64748B; margin-bottom: 1.5rem; }
+    .headline-metric { font-size: 1.1rem; font-weight: 600; color: #0F766E; background: #F0FDFA; padding: 10px 16px; border-radius: 8px; border-left: 4px solid #14B8A6; margin: 8px 0; }
     .stMetric { background-color: #F8FAFC; border-radius: 8px; padding: 12px; border: 1px solid #E2E8F0; }
     </style>
     """,
@@ -51,6 +52,11 @@ high_thresh = st.sidebar.slider("Auto-Match Threshold", min_value=0.50, max_valu
 review_thresh = st.sidebar.slider("Review Threshold", min_value=0.10, max_value=0.70, value=float(CONFIG.REVIEW_THRESHOLD), step=0.01)
 enable_ai = st.sidebar.checkbox("Enable Groq AI Assistance", value=bool(CONFIG.ENABLE_AI_ASSIST))
 
+st.sidebar.markdown("---")
+st.sidebar.markdown("**Mode**")
+run_mode = st.sidebar.radio("Evaluation Mode", ["Standard (Live Data)", "Benchmark (Ground Truth)"], index=0)
+is_benchmark_mode = run_mode.startswith("Benchmark")
+
 user_config = ReconciliationConfig(
     AMOUNT_TOLERANCE=amt_tol,
     DATE_WINDOW_DAYS=date_win,
@@ -63,8 +69,8 @@ user_config = ReconciliationConfig(
 # 3. Main Header & File Uploaders
 # -----------------------------------------------------------------------------
 
-st.markdown('<div class="main-header">AI Financial Reconciliation Engine</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Multi-Tier Deterministic & Bounded Groq AI Matching Engine</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">LedgerLens — AI Finance Controller</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Deterministic + Bounded AI Reconciliation · "What broke at 2 AM?"</div>', unsafe_allow_html=True)
 
 col_u1, col_u2 = st.columns(2)
 with col_u1:
@@ -78,6 +84,7 @@ with col_u2:
 
 df_ledger, df_bank = None, None
 use_sample = st.button("📁 Load Sample Datasets from data/", use_container_width=False)
+data_source_label = "uploaded"
 
 if ledger_file and bank_file:
     try:
@@ -90,12 +97,14 @@ if ledger_file and bank_file:
             df_bank = pd.read_excel(bank_file, engine="openpyxl")
         else:
             df_bank = pd.read_csv(bank_file)
+        data_source_label = "uploaded"
     except Exception as err:
         st.error(f"Error reading uploaded CSV/XLSX files: {err}")
 elif use_sample or (os.path.exists("data/ledger.csv") and os.path.exists("data/bank_statement.csv") and not ledger_file and not bank_file):
     if os.path.exists("data/ledger.csv") and os.path.exists("data/bank_statement.csv"):
         df_ledger = pd.read_csv("data/ledger.csv")
         df_bank = pd.read_csv("data/bank_statement.csv")
+        data_source_label = "benchmark"
         st.info("Loaded sample datasets from `data/ledger.csv` and `data/bank_statement.csv`.")
 
 def validate_datasets(df_l: pd.DataFrame, df_b: pd.DataFrame) -> bool:
@@ -131,46 +140,98 @@ if validate_datasets(df_ledger, df_bank):
         with st.spinner("Executing Multi-Tier Deterministic & AI Reconciliation..."):
             results = reconcile(df_ledger, df_bank, config=user_config)
             st.session_state["reconciled_results"] = results
+            st.session_state["data_source"] = data_source_label
 
-            # Run evaluation if answer key exists
-            if os.path.exists("data/answer_key.csv"):
+            # Run evaluation ONLY in benchmark mode AND when answer key exists for the current dataset
+            if is_benchmark_mode and data_source_label == "benchmark" and os.path.exists("data/answer_key.csv"):
                 try:
-                    eval_metrics = evaluate_reconciliation("data")
+                    # Pass precomputed results so evaluation uses the SAME data+config
+                    eval_metrics = evaluate_reconciliation(
+                        data_dir="data",
+                        config=user_config,
+                        precomputed_results=results,
+                    )
                     st.session_state["eval_metrics"] = eval_metrics
                 except Exception as eval_err:
                     st.warning(f"Ground truth evaluation notice: {eval_err}")
+                    st.session_state["eval_metrics"] = {}
+            else:
+                st.session_state["eval_metrics"] = {}
 
 if "reconciled_results" in st.session_state:
     results = st.session_state["reconciled_results"]
     eval_m = st.session_state.get("eval_metrics", {})
+    current_source = st.session_state.get("data_source", "unknown")
 
     total_rows = len(results)
     matched_cnt = len(results[results["status"] == "MATCHED"])
     review_cnt = len(results[results["status"] == "REVIEW"])
     unmatched_cnt = len(results[results["status"] == "UNMATCHED"])
     ai_calls_cnt = len(results[results["decision_source"] == "groq"]) if "decision_source" in results.columns else 0
-    fp_cnt = eval_m.get("false_positives", 0)
 
     st.markdown("### 📊 Reconciliation Performance Summary")
-    kpi1, kpi2, kpi3, kpi4, kpi5, kpi6 = st.columns(6)
+
+    # Show data source badge
+    if current_source == "uploaded":
+        st.caption("📎 **Mode: Standard (Live/Uploaded Data)** — No benchmark evaluation applied")
+    else:
+        st.caption("📊 **Mode: Benchmark (Sample Data)**")
+
+    kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
     kpi1.metric("Total Records", total_rows)
     kpi2.metric("Matched", matched_cnt, f"{matched_cnt/total_rows*100:.1f}%")
     kpi3.metric("Review Required", review_cnt, f"{review_cnt/total_rows*100:.1f}%")
     kpi4.metric("Unmatched", unmatched_cnt, f"{unmatched_cnt/total_rows*100:.1f}%")
-    kpi5.metric("AI-Assisted Decisions", ai_calls_cnt, "REVIEW Pool Only")
-    kpi6.metric("False Positives", fp_cnt, "0.0% Risk Target")
+    kpi5.metric("AI-Assisted", ai_calls_cnt, "REVIEW Pool Only")
 
+    # Display ground truth metrics ONLY when they exist (benchmark mode)
     if eval_m:
-        st.caption(f"**Ground Truth Metrics** | Precision: **{eval_m.get('precision', 0):.4f}** | Recall: **{eval_m.get('recall', 0):.4f}** | F1 Score: **{eval_m.get('f1_score', 0):.4f}**")
+        headline = eval_m.get("headline", "")
+        if headline:
+            st.markdown(f'<div class="headline-metric">🎯 {headline}</div>', unsafe_allow_html=True)
+
+        cm = eval_m.get("confusion_matrix", {})
+        fp_cnt = cm.get("FP", 0)
+        fn_cnt = cm.get("FN", 0)
+
+        m1, m2, m3, m4, m5, m6 = st.columns(6)
+        m1.metric("Pair Precision", f"{eval_m.get('pair_precision', 0):.4f}")
+        m2.metric("Pair Recall", f"{eval_m.get('pair_recall', 0):.4f}")
+        m3.metric("F1 Score", f"{eval_m.get('f1_score', 0):.4f}")
+        m4.metric("Auto-Res. Precision", f"{eval_m.get('auto_resolution_precision', 0):.4f}")
+        m5.metric("False Positives", fp_cnt)
+        m6.metric("False Negatives", fn_cnt)
 
     # -------------------------------------------------------------------------
-    # 6. Detailed Results Tabs & CSV Download
+    # 6. Detailed Results Tabs & Exception-First View
     # -------------------------------------------------------------------------
 
-    tab_matched, tab_review, tab_unmatched, tab_eval = st.tabs(["✅ Matched Records", "⚠️ Review Required", "❌ Unmatched Records", "🎯 Benchmark Evaluation"])
+    tab_exceptions, tab_matched, tab_review, tab_unmatched, tab_eval = st.tabs([
+        "🔍 Exception Summary", "✅ Matched", "⚠️ Review Required", "❌ Unmatched", "🎯 Benchmark"
+    ])
 
     cols_to_show = ["ledger_id", "bank_id", "status", "matching_rule", "score", "reason", "decision_source", "model_used"]
     cols_exist = [c for c in cols_to_show if c in results.columns]
+
+    with tab_exceptions:
+        st.markdown("### 🔍 What Broke at 2 AM? — Exception Summary")
+        df_exc = results[results["status"].isin(["REVIEW", "UNMATCHED"])].copy()
+        if not df_exc.empty:
+            exc_cols = ["ledger_id", "bank_id", "status", "matching_rule", "score", "reason"]
+            exc_exist = [c for c in exc_cols if c in df_exc.columns]
+            df_exc["action"] = df_exc["matching_rule"].map({
+                "AMBIGUOUS_CANDIDATES": "Human review required",
+                "AI_REVIEW_REQUIRED": "AI inconclusive — manual check",
+                "SCORE_REVIEW": "Low confidence — verify manually",
+                "ONE_TO_ONE_CONFLICT": "Resolve duplicate claim",
+                "NO_CANDIDATE": "Missing counterparty — investigate",
+                "LOW_SCORE": "No plausible match found",
+                "NO_MATCH": "Bank record without ledger entry",
+                "CURRENCY_MISMATCH": "Currency mismatch — verify",
+            }).fillna("Review required")
+            st.dataframe(df_exc[exc_exist + ["action"]], use_container_width=True, hide_index=True)
+        else:
+            st.success("No exceptions — all transactions reconciled successfully!")
 
     with tab_matched:
         df_m = results[results["status"] == "MATCHED"]
@@ -191,7 +252,10 @@ if "reconciled_results" in st.session_state:
         if eval_m:
             st.json(eval_m)
         else:
-            st.info("No ground truth answer key found in data/ to evaluate accuracy.")
+            if current_source == "uploaded":
+                st.info("Benchmark evaluation is not available for uploaded data. Switch to **Benchmark mode** with sample data to see accuracy metrics.")
+            else:
+                st.info("Select **Benchmark** mode in the sidebar and re-run to evaluate against ground truth.")
 
     csv_data = results.to_csv(index=False).encode("utf-8")
     st.download_button(

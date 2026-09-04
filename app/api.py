@@ -1,4 +1,4 @@
-"""FastAPI REST API for LedgerLens Financial Reconciliation Core & Observability (Phase 3 & 4)."""
+"""FastAPI REST API for LedgerLens Financial Reconciliation Core & Observability."""
 
 import os
 import sys
@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from src.config import CONFIG, ReconciliationConfig
 from src.data_validation import validate_ledger_schema, validate_bank_schema, validate_custom_data_paths
 from src.reconciliation import reconcile
+from src.services.finance_controller import process_batch
 
 app = FastAPI(
     title="LedgerLens API",
@@ -203,6 +204,10 @@ def run_reconciliation_endpoint(
 
     if debug_mode:
         response_data["traces"] = traces
+
+    # Finance Controller batch processing
+    batch = process_batch(df_results, run_id=run_id)
+    response_data["batch"] = batch.to_dict()
 
     _RUN_CACHE[run_id] = response_data
     _RUN_CACHE["latest"] = response_data
