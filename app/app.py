@@ -95,11 +95,14 @@ if enable_ai:
         type="password",
         help="Enter your Groq API key (starts with gsk_...) for live AI assistance.",
     )
-    if user_groq_key:
+    if user_groq_key and user_groq_key.strip().startswith("gsk_"):
         os.environ["GROQ_API_KEY"] = user_groq_key.strip()
         st.sidebar.caption("🟢 Live Groq AI: Key configured")
+    elif user_groq_key:
+        os.environ["GROQ_API_KEY"] = user_groq_key.strip()
+        st.sidebar.caption("🟡 Key configured (format: gsk_...)")
     else:
-        st.sidebar.caption("🟡 No Key: AI safely defaults to REVIEW")
+        st.sidebar.caption("⚪ No Key: Ambiguous cases safely default to REVIEW")
 
     calls_per_min = st.sidebar.number_input(
         "Max Groq Calls / Min",
@@ -190,7 +193,7 @@ if st.session_state["active_mode"] != run_mode:
 # -----------------------------------------------------------------------------
 
 st.markdown('<div class="main-header">LedgerLens — AI Finance Controller</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Deterministic + Bounded AI Reconciliation · "What broke at 2 AM?"</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Deterministic Multi-Tier Matching & Guardrailed AI Assistance</div>', unsafe_allow_html=True)
 
 if is_benchmark_mode:
     st.markdown(
@@ -348,6 +351,14 @@ if validate_datasets(df_ledger, df_bank):
             st.session_state["reconciled_results"] = results
             st.session_state["data_source"] = st.session_state.get("data_source", "uploaded")
 
+            # Execute agent workflow automatically so agent case intelligence is immediately active
+            try:
+                agent_inst = ReconciliationAgent()
+                summary_inst = agent_inst.observe_and_reconcile(df_ledger, df_bank)
+                st.session_state["agent_summary"] = summary_inst
+            except Exception as ag_err:
+                st.warning(f"Agent workflow notice: {ag_err}")
+
             # In Benchmark mode, execute full ground-truth evaluation
             if is_benchmark_mode and os.path.exists(sample_answer_key_path):
                 try:
@@ -386,12 +397,16 @@ if "reconciled_results" in st.session_state:
     else:
         st.caption("📁 **Mode: Standard (Sample Data)** — Reconciled with multi-tier engine")
 
+    pct_m = f" ({matched_cnt/total_rows*100:.1f}%)" if total_rows > 0 else ""
+    pct_r = f" ({review_cnt/total_rows*100:.1f}%)" if total_rows > 0 else ""
+    pct_u = f" ({unmatched_cnt/total_rows*100:.1f}%)" if total_rows > 0 else ""
+
     kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
-    kpi1.metric("Total Records", total_rows)
-    kpi2.metric("Matched", matched_cnt, f"{matched_cnt/total_rows*100:.1f}%" if total_rows > 0 else "0%")
-    kpi3.metric("Review Required", review_cnt, f"{review_cnt/total_rows*100:.1f}%" if total_rows > 0 else "0%")
-    kpi4.metric("Unmatched", unmatched_cnt, f"{unmatched_cnt/total_rows*100:.1f}%" if total_rows > 0 else "0%")
-    kpi5.metric("AI-Assisted", ai_calls_cnt, "REVIEW Pool Only")
+    kpi1.metric("Total Records", f"{total_rows:,}")
+    kpi2.metric("Matched", f"{matched_cnt:,}{pct_m}")
+    kpi3.metric("Review Required", f"{review_cnt:,}{pct_r}")
+    kpi4.metric("Unmatched", f"{unmatched_cnt:,}{pct_u}")
+    kpi5.metric("AI Escalations", f"{ai_calls_cnt:,}", help="Ambiguous transactions evaluated via Groq compound LLM")
 
     # Display ground truth metrics when in benchmark mode
     if eval_m:
@@ -436,10 +451,10 @@ if "reconciled_results" in st.session_state:
             st.markdown(f"**Benchmark Summary:** `{eval_m.get('headline', '')}`")
 
             col_ev1, col_ev2, col_ev3, col_ev4 = st.columns(4)
-            col_ev1.metric("Pair Precision", f"{eval_m.get('pair_precision', 0):.4f}", "TP / (TP + FP)")
-            col_ev2.metric("Pair Recall", f"{eval_m.get('pair_recall', 0):.4f}", "TP / (TP + FN)")
-            col_ev3.metric("F1 Score", f"{eval_m.get('f1_score', 0):.4f}", "Harmonic Mean")
-            col_ev4.metric("Auto-Res. Precision", f"{eval_m.get('auto_resolution_precision', 0):.4f}", "Deterministic accuracy")
+            col_ev1.metric("Pair Precision", f"{eval_m.get('pair_precision', 0):.4f}", help="True Positives / (True Positives + False Positives)")
+            col_ev2.metric("Pair Recall", f"{eval_m.get('pair_recall', 0):.4f}", help="True Positives / (True Positives + False Negatives)")
+            col_ev3.metric("F1 Score", f"{eval_m.get('f1_score', 0):.4f}", help="Harmonic Mean of Precision and Recall")
+            col_ev4.metric("Auto-Resolution Precision", f"{eval_m.get('auto_resolution_precision', 0):.4f}", help="Precision of deterministic rules before AI review")
 
             st.markdown("#### ⚖️ Confusion Matrix")
             cm = eval_m.get("confusion_matrix", {})
@@ -491,12 +506,12 @@ if "reconciled_results" in st.session_state:
                 st.info("Benchmark evaluation is available in **Benchmark (Ground Truth)** mode. Switch modes in the sidebar to benchmark against the canonical answer key.")
 
     with tab_exceptions:
-        st.markdown("### 🔍 What Broke at 2 AM? — Exception Summary")
+        st.markdown("### 🔍 Unreconciled Exceptions & Action Recommendations")
         df_exc = results[results["status"].isin(["REVIEW", "UNMATCHED"])].copy()
         if not df_exc.empty:
             exc_cols = ["ledger_id", "bank_id", "status", "matching_rule", "score", "reason"]
             exc_exist = [c for c in exc_cols if c in df_exc.columns]
-            df_exc["action"] = df_exc["matching_rule"].map({
+            df_exc["resolution_guidance"] = df_exc["matching_rule"].map({
                 "AMBIGUOUS_CANDIDATES": "Human review required",
                 "AI_REVIEW_REQUIRED": "AI inconclusive — manual check",
                 "SCORE_REVIEW": "Low confidence — verify manually",
@@ -506,28 +521,21 @@ if "reconciled_results" in st.session_state:
                 "NO_MATCH": "Bank record without ledger entry",
                 "CURRENCY_MISMATCH": "Currency mismatch — verify",
             }).fillna("Review required")
-            st.dataframe(df_exc[exc_exist + ["action"]], use_container_width=True, hide_index=True)
+            st.dataframe(df_exc[exc_exist + ["resolution_guidance"]], use_container_width=True, hide_index=True)
         else:
             st.success("No exceptions — all transactions reconciled successfully!")
 
     with tab_agent:
         st.markdown("### 🤖 Bounded Financial Reconciliation Agent Workflow")
-        st.markdown("`OBSERVE → NORMALIZE → RECONCILE → INVESTIGATE → POLICY CHECK → ACT → VERIFY → AUDIT`")
-
-        if st.button("▶ Run Agent Workflow", type="secondary"):
-            with st.spinner("Executing Bounded Agent Loop..."):
-                agent_inst = ReconciliationAgent()
-                summary_inst = agent_inst.observe_and_reconcile(df_ledger, df_bank)
-                st.session_state["agent_summary"] = summary_inst
-                st.rerun()
+        st.caption("Lifecycle: **Observe & Normalize** ➔ **Multi-Tier Matching** ➔ **Exception Investigation** ➔ **Policy Rules** ➔ **Action Execution** ➔ **Verification & Audit**")
 
         if "agent_summary" in st.session_state:
             ag_sum = st.session_state["agent_summary"]
             ac1, ac2, ac3, ac4, ac5 = st.columns(5)
-            ac1.metric("Agent Cases", ag_sum.total_cases)
-            ac2.metric("Resolved", ag_sum.resolved_count, f"Auto: {ag_sum.auto_resolved_count}")
-            ac3.metric("Fee Adjustments", ag_sum.fee_adjusted_count)
-            ac4.metric("Pending Approval", ag_sum.pending_approval_count)
+            ac1.metric("Agent Cases", f"{ag_sum.total_cases:,}")
+            ac2.metric("Resolved Cases", f"{ag_sum.resolved_count:,}", help=f"Auto-resolved: {ag_sum.auto_resolved_count}, Fee adjustments: {ag_sum.fee_adjusted_count}")
+            ac3.metric("Fee Adjustments", f"{ag_sum.fee_adjusted_count:,}")
+            ac4.metric("Pending Approval", f"{ag_sum.pending_approval_count:,}")
             ac5.metric("Verification Rate", f"{ag_sum.verification_pass_rate*100:.1f}%")
 
             st.markdown(ag_sum.summary_markdown)
@@ -538,8 +546,15 @@ if "reconciled_results" in st.session_state:
                 show_c_cols = ["case_id", "ledger_id", "bank_id", "state", "status", "exception_type", "score"]
                 exist_c_cols = [c for c in show_c_cols if c in df_cases.columns]
                 st.dataframe(df_cases[exist_c_cols], use_container_width=True, hide_index=True)
+
+            if st.button("🔄 Re-evaluate Agent Policies", type="secondary"):
+                with st.spinner("Re-evaluating agent policies..."):
+                    agent_inst = ReconciliationAgent()
+                    summary_inst = agent_inst.observe_and_reconcile(df_ledger, df_bank)
+                    st.session_state["agent_summary"] = summary_inst
+                    st.rerun()
         else:
-            st.info("Click **'Run Agent Workflow'** above to view the case intelligence and audit trail.")
+            st.info("Run reconciliation to view the case intelligence and audit trail.")
 
     with tab_matched:
         df_m = results[results["status"] == "MATCHED"]
