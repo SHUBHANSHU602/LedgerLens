@@ -15,7 +15,6 @@ LedgerLens is an enterprise-grade financial reconciliation engine combining mult
 - [Benchmark Ground-Truth Evaluation](#-benchmark-ground-truth-evaluation)
 - [REST API & Observability](#-rest-api--observability)
 - [Installation & Quickstart](#-installation--quickstart)
-- [Groq API Key Configuration & Rate Limits](#-groq-api-key-configuration--rate-limits)
 - [Streamlit Cloud Deployment](#-streamlit-cloud-deployment)
 - [Developer CLI Commands](#-developer-cli-commands)
 - [Known Limitations](#-known-limitations)
@@ -313,23 +312,6 @@ Edit `.env` to include your Groq API key:
 GROQ_API_KEY=gsk_your_groq_api_key_here
 GROQ_MAX_CALLS_PER_MINUTE=25
 ```
-
----
-
-## 🔑 Groq API Key Configuration & Rate Limits
-
-1. **Obtaining a Free Key (30 RPM)**:
-   - Create a free account at [console.groq.com](https://console.groq.com/).
-   - Navigate to **API Keys** ➔ **Create API Key**.
-   - Copy the key starting with `gsk_...`.
-2. **Where to Configure**:
-   - **Local `.env`**: Set `GROQ_API_KEY=gsk_...`
-   - **Streamlit Sidebar**: Paste directly into the password field under **"Groq API Key (Live Inference)"**.
-   - **Streamlit Cloud**: Add `GROQ_API_KEY = "gsk_..."` under App Settings ➔ Secrets.
-3. **Upgrading Beyond 30 RPM (100–1,000 RPM)**:
-   - In Groq Console, visit **Settings ➔ Billing** and add payment details ($5–$10 credit).
-   - Upgrades your account to On-Demand Tier with 100–1,000 RPM.
-   - You can then raise **"Max Groq Calls / Min"** in the sidebar to `60` for rapid bulk reconciliation.
 
 ---
 
