@@ -108,7 +108,7 @@ def reconcile(
         l_id: str, b_id: str, status: str, rule: str, score: float, reason: str,
         source: str = "deterministic", model: str = "none", ai_reason: str = "",
         orig_score: Optional[float] = None, amt_diff: float = 0.0, date_diff: int = 0,
-        rank: int = 1, count: int = 1,
+        rank: int = 1, count: int = 1, evidence: Optional[Dict[str, float]] = None,
     ) -> None:
         rec = ReconciliationRecord(
             ledger_id=l_id, bank_id=b_id, status=status, matching_rule=rule,
@@ -116,6 +116,7 @@ def reconcile(
             ai_reason=ai_reason, original_score=orig_score if orig_score is not None else score,
             amount_difference=amt_diff, date_difference=date_diff,
             candidate_rank=rank, candidate_count=count,
+            evidence_breakdown=evidence or {},
         )
         matched_results.append(rec.to_dict())
         if l_id and status in ("MATCHED", "REVIEW", "UNMATCHED"):
@@ -138,17 +139,18 @@ def reconcile(
         b_id = b_row["utr_reference"]
         amt_diff = abs(l_amt - b_row["norm_amount"])
         date_diff = abs((l_date - b_row["norm_date"]).days)
+        _, breakdown = compute_evidence_score(l_row, b_row, config)
         if l_curr != b_row["norm_curr"]:
             add_result(
                 l_id, b_id, "REVIEW", "CURRENCY_MISMATCH", 0.0,
                 f"Currency mismatch ({l_curr} vs {b_row['norm_curr']})",
-                amt_diff=amt_diff, date_diff=date_diff,
+                amt_diff=amt_diff, date_diff=date_diff, evidence=breakdown,
             )
         elif amt_diff <= config.AMOUNT_TOLERANCE and date_diff <= config.DATE_WINDOW_DAYS:
             add_result(
                 l_id, b_id, "MATCHED", "EXACT_REFERENCE", 1.0,
                 "Exact reference, amount, and date match",
-                amt_diff=amt_diff, date_diff=date_diff,
+                amt_diff=amt_diff, date_diff=date_diff, evidence=breakdown,
             )
 
     # Tier 2: exact unique amount/date match without contradictory reference.
@@ -167,9 +169,10 @@ def reconcile(
             b_ref = b_row["extracted_ref"]
             if b_ref and b_ref != l_id:
                 continue
+            _, breakdown = compute_evidence_score(l_row, b_row, config)
             add_result(
                 l_id, b_row["utr_reference"], "MATCHED", "EXACT_AMOUNT_DATE", 0.9,
-                "Exact amount and date match", amt_diff=0.0, date_diff=0,
+                "Exact amount and date match", amt_diff=0.0, date_diff=0, evidence=breakdown,
             )
 
     # Tier 3: bounded candidate generation, evidence scoring, and optional AI.
@@ -203,7 +206,7 @@ def reconcile(
             )
             continue
 
-        top_score, top_b_id, _, _, top_amt_diff, top_date_diff = top_candidates[0]
+        top_score, top_b_id, _, top_breakdown, top_amt_diff, top_date_diff = top_candidates[0]
         cand_count = len(top_candidates)
         is_ambiguous = cand_count > 1 and (
             top_score - top_candidates[1][0]
@@ -225,7 +228,7 @@ def reconcile(
                     selected_id = top_b_id
 
                 selected = next((c for c in ai_candidates if c[1] == selected_id), ai_candidates[0])
-                sel_score, _, _, _, sel_amt_diff, sel_date_diff = selected
+                sel_score, _, _, sel_breakdown, sel_amt_diff, sel_date_diff = selected
                 sel_rank = ai_candidate_ids.index(selected_id) + 1
 
                 if ai_status == "MATCHED":
@@ -234,13 +237,14 @@ def reconcile(
                         f"AI Confirmed: {ai_reason}", source="groq", model=ai_model,
                         ai_reason=ai_reason, orig_score=sel_score, amt_diff=sel_amt_diff,
                         date_diff=sel_date_diff, rank=sel_rank, count=cand_count,
+                        evidence=sel_breakdown,
                     )
                 else:
                     add_result(
                         l_id, top_b_id, "REVIEW", "AI_REVIEW_REQUIRED", top_score,
                         f"AI Review: {ai_reason}", source="groq", model=ai_model,
                         ai_reason=ai_reason, orig_score=top_score, amt_diff=top_amt_diff,
-                        date_diff=top_date_diff, count=cand_count,
+                        date_diff=top_date_diff, count=cand_count, evidence=top_breakdown,
                     )
             else:
                 rule = "AMBIGUOUS_CANDIDATES" if is_ambiguous else "SCORE_REVIEW"
@@ -248,18 +252,21 @@ def reconcile(
                     l_id, top_b_id, "REVIEW", rule, top_score,
                     f"Deterministic review required ({top_score:.2f})",
                     amt_diff=top_amt_diff, date_diff=top_date_diff, count=cand_count,
+                    evidence=top_breakdown,
                 )
         elif top_score >= config.HIGH_CONFIDENCE_THRESHOLD:
             add_result(
                 l_id, top_b_id, "MATCHED", "SCORE_MATCHED", top_score,
                 f"High confidence match ({top_score:.2f})",
                 amt_diff=top_amt_diff, date_diff=top_date_diff, count=cand_count,
+                evidence=top_breakdown,
             )
         else:
             add_result(
                 l_id, "", "UNMATCHED", "LOW_SCORE", top_score,
                 f"Top score ({top_score:.2f}) below review threshold",
                 amt_diff=top_amt_diff, date_diff=top_date_diff, count=cand_count,
+                evidence=top_breakdown,
             )
 
     # Defensive global one-to-one conflict resolution.
