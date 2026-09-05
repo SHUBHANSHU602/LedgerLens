@@ -1,6 +1,5 @@
 """Regression tests for README-level behavior and correctness guarantees."""
 
-import os
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -204,7 +203,11 @@ def test_debug_api_exposes_evidence_breakdown():
 def test_custom_data_request_never_silently_falls_back(monkeypatch, tmp_path):
     from app import api as api_module
 
-    monkeypatch.setattr(api_module.CONFIG, "LEDGERLENS_CUSTOM_DATA_DIR", str(tmp_path), raising=False)
+    monkeypatch.setattr(
+        api_module,
+        "CONFIG",
+        ReconciliationConfig(LEDGERLENS_CUSTOM_DATA_DIR=str(tmp_path)),
+    )
     response = client.post("/api/v1/reconcile?use_custom_data=true")
     assert response.status_code == 400
     assert "incomplete" in response.json()["detail"].lower()
