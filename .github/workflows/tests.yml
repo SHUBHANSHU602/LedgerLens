@@ -25,3 +25,7 @@ jobs:
         env:
           GROQ_API_KEY: ''
         run: python -m pytest -q
+      - name: Run offline benchmark
+        env:
+          GROQ_API_KEY: ''
+        run: python -m scripts.run_benchmark
