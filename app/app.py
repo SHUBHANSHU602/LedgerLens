@@ -1,22 +1,18 @@
-"""Streamlit Financial Reconciliation Dashboard (Thin UI Wrapper)."""
-
 import os
+import sys
 import io
 import pandas as pd
 import streamlit as st
 
-try:
-    from src.config import ReconciliationConfig, CONFIG
-    from src.reconciliation import reconcile
-    from src.evaluation import evaluate_reconciliation
-    from src.agent import ReconciliationAgent
-except ModuleNotFoundError:
-    import sys
-    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-    from src.config import ReconciliationConfig, CONFIG
-    from src.reconciliation import reconcile
-    from src.evaluation import evaluate_reconciliation
-    from src.agent import ReconciliationAgent
+# Ensure repository root is always in sys.path
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
+from src.config import ReconciliationConfig, CONFIG
+from src.reconciliation import reconcile
+from src.evaluation import evaluate_reconciliation
+from src.agent import ReconciliationAgent
 
 
 # -----------------------------------------------------------------------------
@@ -89,6 +85,10 @@ df_ledger, df_bank = None, None
 use_sample = st.button("📁 Load Sample Datasets from data/", use_container_width=False)
 data_source_label = "uploaded"
 
+sample_ledger_path = os.path.join(ROOT_DIR, "data", "ledger.csv")
+sample_bank_path = os.path.join(ROOT_DIR, "data", "bank_statement.csv")
+sample_answer_key_path = os.path.join(ROOT_DIR, "data", "answer_key.csv")
+
 if ledger_file and bank_file:
     try:
         if ledger_file.name.endswith(".xlsx"):
@@ -103,10 +103,10 @@ if ledger_file and bank_file:
         data_source_label = "uploaded"
     except Exception as err:
         st.error(f"Error reading uploaded CSV/XLSX files: {err}")
-elif use_sample or (os.path.exists("data/ledger.csv") and os.path.exists("data/bank_statement.csv") and not ledger_file and not bank_file):
-    if os.path.exists("data/ledger.csv") and os.path.exists("data/bank_statement.csv"):
-        df_ledger = pd.read_csv("data/ledger.csv")
-        df_bank = pd.read_csv("data/bank_statement.csv")
+elif use_sample or (os.path.exists(sample_ledger_path) and os.path.exists(sample_bank_path) and not ledger_file and not bank_file):
+    if os.path.exists(sample_ledger_path) and os.path.exists(sample_bank_path):
+        df_ledger = pd.read_csv(sample_ledger_path)
+        df_bank = pd.read_csv(sample_bank_path)
         data_source_label = "benchmark"
         st.info("Loaded sample datasets from `data/ledger.csv` and `data/bank_statement.csv`.")
 
@@ -146,11 +146,11 @@ if validate_datasets(df_ledger, df_bank):
             st.session_state["data_source"] = data_source_label
 
             # Run evaluation ONLY in benchmark mode AND when answer key exists for the current dataset
-            if is_benchmark_mode and data_source_label == "benchmark" and os.path.exists("data/answer_key.csv"):
+            if is_benchmark_mode and data_source_label == "benchmark" and os.path.exists(sample_answer_key_path):
                 try:
                     # Pass precomputed results so evaluation uses the SAME data+config
                     eval_metrics = evaluate_reconciliation(
-                        data_dir="data",
+                        data_dir=os.path.join(ROOT_DIR, "data"),
                         config=user_config,
                         precomputed_results=results,
                     )
