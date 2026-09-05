@@ -139,6 +139,11 @@ class ActionService:
         action_type: str,
         payload: Optional[Dict[str, Any]] = None,
     ) -> Tuple[ActionExecution, VerificationResult]:
+        handler = self.registry.get_handler(action_type)
+        if handler is None:
+            action_type = ActionType.FLAG_FOR_REVIEW.value
+            handler = self.registry.get_handler(action_type)
+
         idem_key = f"{case.case_id}:{action_type}"
         if idem_key in self.executed_actions:
             existing = self.executed_actions[idem_key]
@@ -148,17 +153,11 @@ class ActionService:
                 verification_notes="Action already executed (Idempotency check passed).",
                 timestamp=datetime.now(timezone.utc).isoformat(),
             )
-            case.audit_history.append(
-                __import__("src.agent.models", fromlist=["AuditEvent"]).AuditEvent(
-                    event_id=f"EVT-{uuid.uuid4().hex[:8].upper()}",
-                    timestamp=datetime.now(timezone.utc).isoformat(),
-                    case_id=case.case_id,
-                    actor="ACTION_SERVICE",
-                    event_type="IDEMPOTENCY_HIT",
-                    from_state=case.state.value,
-                    to_state=case.state.value,
-                    details={"action_type": action_type},
-                )
+            case.transition_to(
+                case.state,
+                actor="ACTION_SERVICE",
+                event_type="IDEMPOTENCY_HIT",
+                details={"action_type": action_type},
             )
             return existing, verification
 
@@ -168,10 +167,6 @@ class ActionService:
             action_type=action_type,
             payload=payload or {},
         )
-        handler = self.registry.get_handler(action_type)
-        if handler is None:
-            handler = FlagForReviewHandler()
-            action_type = ActionType.FLAG_FOR_REVIEW.value
 
         case.transition_to(
             CaseState.ACTION_EXECUTING,
@@ -201,10 +196,7 @@ class ActionService:
                 final_state,
                 actor="ACTION_SERVICE",
                 event_type="ACTION_VERIFIED",
-                details={
-                    "action_type": action_type,
-                    "verification_status": verification.status,
-                },
+                details={"action_type": action_type, "verification_status": verification.status},
             )
         else:
             case.transition_to(
