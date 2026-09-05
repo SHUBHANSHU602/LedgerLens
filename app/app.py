@@ -76,6 +76,38 @@ high_thresh = st.sidebar.slider("Auto-Match Threshold", min_value=0.50, max_valu
 review_thresh = st.sidebar.slider("Review Threshold", min_value=0.10, max_value=0.70, value=float(CONFIG.REVIEW_THRESHOLD), step=0.01)
 enable_ai = st.sidebar.checkbox("Enable Groq AI Assistance", value=bool(CONFIG.ENABLE_AI_ASSIST))
 
+if enable_ai:
+    # Resolve initial key from os.environ or st.secrets
+    current_key = os.getenv("GROQ_API_KEY", "")
+    try:
+        if not current_key and hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
+            current_key = str(st.secrets["GROQ_API_KEY"]).strip()
+    except Exception:
+        pass
+
+    user_groq_key = st.sidebar.text_input(
+        "Groq API Key (Live Inference)",
+        value=current_key,
+        type="password",
+        help="Enter your Groq API key (starts with gsk_...) for live AI assistance.",
+    )
+    if user_groq_key:
+        os.environ["GROQ_API_KEY"] = user_groq_key.strip()
+        st.sidebar.caption("🟢 Live Groq AI: Key configured")
+    else:
+        st.sidebar.caption("🟡 No Key: AI safely defaults to REVIEW")
+
+    calls_per_min = st.sidebar.number_input(
+        "Max Groq Calls / Min",
+        min_value=5,
+        max_value=60,
+        value=int(getattr(CONFIG, "GROQ_MAX_CALLS_PER_MINUTE", 25)),
+        step=5,
+        help="Rate limit threshold for Groq API calls to avoid 429 errors.",
+    )
+else:
+    calls_per_min = 25
+
 st.sidebar.markdown("---")
 st.sidebar.markdown("**Mode**")
 run_mode = st.sidebar.radio("Evaluation Mode", ["Standard (Live Data)", "Benchmark (Ground Truth)"], index=0)
@@ -87,6 +119,7 @@ user_config = ReconciliationConfig(
     HIGH_CONFIDENCE_THRESHOLD=high_thresh,
     REVIEW_THRESHOLD=review_thresh,
     ENABLE_AI_ASSIST=enable_ai,
+    GROQ_MAX_CALLS_PER_MINUTE=int(calls_per_min),
 )
 
 # -----------------------------------------------------------------------------

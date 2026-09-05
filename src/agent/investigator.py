@@ -6,12 +6,13 @@ from src.agent.models import ReconciliationCase, CaseInvestigation, ActionType
 from src.agent.policy import PolicyEngine
 
 try:
-    from src.ai_matcher import evaluate_ambiguous_record
+    from src.ai_matcher import evaluate_ambiguous_record, get_groq_api_key
 except ModuleNotFoundError:
     try:
-        from ai_matcher import evaluate_ambiguous_record
+        from ai_matcher import evaluate_ambiguous_record, get_groq_api_key
     except ModuleNotFoundError:
         evaluate_ambiguous_record = None
+        get_groq_api_key = lambda: os.getenv("GROQ_API_KEY", "")
 
 
 class ExceptionInvestigator:
@@ -116,7 +117,7 @@ class ExceptionInvestigator:
             )
 
         # Case 4: Ambiguous Match — invoke LLM if available and candidates populated, else deterministic fallback
-        if case.candidates and evaluate_ambiguous_record is not None and os.getenv("GROQ_API_KEY"):
+        if case.candidates and evaluate_ambiguous_record is not None and get_groq_api_key():
             try:
                 # Build ledger row as a dict (compatible with evaluate_ambiguous_record)
                 l_row = case.ledger_record

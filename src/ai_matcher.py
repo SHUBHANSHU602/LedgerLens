@@ -88,6 +88,25 @@ def get_rate_limiter() -> GroqRateLimiter:
     return _RATE_LIMITER
 
 
+def get_groq_api_key() -> str:
+    """Safely retrieve the Groq API key from environment or Streamlit secrets."""
+    key = os.getenv("GROQ_API_KEY", "").strip()
+    if key:
+        return key
+
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
+            sec_key = str(st.secrets["GROQ_API_KEY"]).strip()
+            if sec_key:
+                os.environ["GROQ_API_KEY"] = sec_key
+                return sec_key
+    except Exception:
+        pass
+
+    return ""
+
+
 def clear_ai_cache() -> None:
     """Clear in-memory AI cache and reset rate limiter history."""
     _AI_CACHE.clear()
@@ -136,7 +155,7 @@ def evaluate_ambiguous_record(
     if cache_key in _AI_CACHE:
         return _AI_CACHE[cache_key]
 
-    api_key = os.getenv("GROQ_API_KEY", "").strip()
+    api_key = get_groq_api_key()
     if not api_key:
         return {
             "same_transaction": False,
