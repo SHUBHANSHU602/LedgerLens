@@ -1,8 +1,11 @@
 """FastAPI REST API for LedgerLens Financial Reconciliation Core & Observability."""
 
+import json
 import os
 import sys
 import uuid
+from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 import pandas as pd
 from fastapi import FastAPI, UploadFile, File, Form, Query, HTTPException
@@ -13,16 +16,83 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from src.config import CONFIG, ReconciliationConfig
 from src.data_validation import validate_ledger_schema, validate_bank_schema, validate_custom_data_paths
 from src.reconciliation import reconcile
-from src.services.finance_controller import process_batch
+from src.services.finance_controller import process_batch, detect_batch_aggregates
 from src.agent import ReconciliationAgent, ActionType
+
+# ---------------------------------------------------------------------------
+# JSON-Serialization helper for numpy / pandas numeric types
+# ---------------------------------------------------------------------------
+
+class _NumpyEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles numpy int64/float64 types produced by pandas."""
+    def default(self, obj: Any) -> Any:
+        try:
+            import numpy as np
+            if isinstance(obj, np.integer):
+                return int(obj)
+            if isinstance(obj, np.floating):
+                return float(obj)
+            if isinstance(obj, np.ndarray):
+                return obj.tolist()
+        except ImportError:
+            pass
+        return super().default(obj)
+
+
+# ---------------------------------------------------------------------------
+# Persistent run cache (survives server restarts)
+# ---------------------------------------------------------------------------
+
+_CACHE_FILE = Path("data") / ".ledgerlens_cache.json"
+_MAX_CACHE_RUNS = 50  # Keep last N runs to prevent unbounded growth
+_RUN_CACHE: Dict[str, Dict[str, Any]] = {}
+
+
+def _load_cache_from_disk() -> None:
+    """Load the persisted run cache from disk into _RUN_CACHE on startup."""
+    global _RUN_CACHE
+    if _CACHE_FILE.exists():
+        try:
+            loaded = json.loads(_CACHE_FILE.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                _RUN_CACHE.update(loaded)
+        except Exception:
+            pass  # Corrupted cache — start fresh
+
+
+def _save_cache_to_disk() -> None:
+    """Persist the current _RUN_CACHE to disk after each reconciliation run."""
+    try:
+        _CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        run_keys = [k for k in _RUN_CACHE if k != "latest"]
+        if len(run_keys) > _MAX_CACHE_RUNS:
+            for old_key in run_keys[:-_MAX_CACHE_RUNS]:
+                _RUN_CACHE.pop(old_key, None)
+        _CACHE_FILE.write_text(
+            json.dumps(_RUN_CACHE, cls=_NumpyEncoder, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass  # Non-critical — cache persistence is best-effort
+
+
+@asynccontextmanager
+async def _lifespan(application: "FastAPI"):
+    """Lifespan context manager: load persisted cache on startup."""
+    _load_cache_from_disk()
+    yield
+
+
+# ---------------------------------------------------------------------------
+# FastAPI app instance
+# ---------------------------------------------------------------------------
 
 app = FastAPI(
     title="LedgerLens API",
     description="Financial Reconciliation Engine with Bounded Groq AI & Observability Traces",
     version="1.0.0",
+    lifespan=_lifespan,
 )
-
-_RUN_CACHE: Dict[str, Dict[str, Any]] = {}
 
 
 @app.get("/health")
@@ -210,8 +280,18 @@ def run_reconciliation_endpoint(
     batch = process_batch(df_results, run_id=run_id)
     response_data["batch"] = batch.to_dict()
 
+    # Batch aggregate detection — identifies unmatched bank credits that may be multi-order aggregates
+    try:
+        aggregates = detect_batch_aggregates(df_ledger, df_bank, df_results)
+        if aggregates:
+            response_data["batch_aggregates"] = aggregates
+            response_data["batch_aggregate_count"] = len(aggregates)
+    except Exception:
+        pass  # Non-critical — detection failure does not affect main reconciliation result
+
     _RUN_CACHE[run_id] = response_data
     _RUN_CACHE["latest"] = response_data
+    _save_cache_to_disk()
     return response_data
 
 

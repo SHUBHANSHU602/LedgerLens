@@ -25,7 +25,9 @@ EXCEPTION_TYPES = {
     "CURRENCY_MISMATCH": "Currency contradiction between ledger and bank",
     "ONE_TO_ONE_CONFLICT": "Duplicate bank assignment prevented",
     "AI_INCONCLUSIVE": "AI could not confirm match — escalated to review",
+    "BATCH_AGGREGATE_SUSPECTED": "Bank credit may be a batch aggregate of multiple ledger orders",
 }
+
 
 
 @dataclass
@@ -60,7 +62,140 @@ class BatchSummary:
         return asdict(self)
 
 
+def detect_batch_aggregates(
+    df_ledger: pd.DataFrame,
+    df_bank: pd.DataFrame,
+    df_results: pd.DataFrame,
+    tolerance_pct: float = 0.02,
+    date_window_days: int = 5,
+) -> List[Dict[str, Any]]:
+    """Detect unmatched bank credits that may be batch aggregate settlements of multiple ledger orders.
+
+    A payment gateway (e.g. Razorpay) sometimes batches multiple orders into a single bank settlement.
+    For example, three orders for ₹1,000 + ₹2,000 + ₹3,000 arrive as a single ₹5,940 bank credit
+    (after 1% MDR fee). This function detects such patterns using a greedy cumulative-sum heuristic.
+
+    Args:
+        df_ledger: Original ledger DataFrame with order records.
+        df_bank: Original bank statement DataFrame.
+        df_results: Reconciliation results DataFrame from reconcile().
+        tolerance_pct: Max fractional difference allowed between cumulative ledger sum and bank amount (default 2%).
+        date_window_days: Max days between ledger order dates and bank credit date to consider (default ±5 days).
+
+    Returns:
+        List of suspected batch aggregate dicts, each containing:
+            - bank_utr: Bank UTR reference of the unmatched credit
+            - bank_amount: Bank credit amount
+            - bank_date: Bank credit value date
+            - suspected_ledger_ids: List of order IDs whose amounts sum near the bank amount
+            - combined_ledger_amount: Sum of suspected ledger order amounts
+            - variance_pct: Percentage difference between combined amount and bank amount
+            - recommendation: Human-readable action recommendation
+    """
+    from datetime import datetime, timedelta
+
+    if df_results.empty or df_ledger.empty or df_bank.empty:
+        return []
+
+    required_ledger = {"order_id", "amount", "order_date"}
+    required_bank = {"utr_reference", "credited_amount", "value_date"}
+    if not required_ledger.issubset(df_ledger.columns) or not required_bank.issubset(df_bank.columns):
+        return []
+
+    # Identify unmatched ledger order IDs
+    unmatched_ledger_ids: set = set(
+        df_results[
+            (df_results["status"] == "UNMATCHED") &
+            (df_results["ledger_id"].astype(str) != "")
+        ]["ledger_id"].astype(str).tolist()
+    )
+
+    # Identify unmatched bank UTRs
+    unmatched_bank_utrs: set = set(
+        df_results[
+            (df_results["status"] == "UNMATCHED") &
+            (df_results["bank_id"].astype(str) != "")
+        ]["bank_id"].astype(str).tolist()
+    )
+
+    if not unmatched_ledger_ids or not unmatched_bank_utrs:
+        return []
+
+    # Filter DataFrames to unmatched records only
+    unmatched_ledger = df_ledger[df_ledger["order_id"].astype(str).isin(unmatched_ledger_ids)].copy()
+    unmatched_bank = df_bank[df_bank["utr_reference"].astype(str).isin(unmatched_bank_utrs)].copy()
+
+    if unmatched_ledger.empty or unmatched_bank.empty:
+        return []
+
+    def parse_date(val: Any):
+        """Safe date parser returning a datetime.date or None."""
+        try:
+            if hasattr(val, "date"):
+                return val.date() if hasattr(val.date, "__call__") else val
+            return datetime.strptime(str(val)[:10], "%Y-%m-%d").date()
+        except Exception:
+            return None
+
+    suspected_aggregates: List[Dict[str, Any]] = []
+
+    for _, bank_row in unmatched_bank.iterrows():
+        bank_amt = float(bank_row.get("credited_amount", 0.0))
+        bank_date = parse_date(bank_row.get("value_date", ""))
+        bank_utr = str(bank_row.get("utr_reference", ""))
+
+        if bank_amt <= 0:
+            continue
+
+        # Filter ledger records within the date window
+        nearby_ledger = []
+        for _, l_row in unmatched_ledger.iterrows():
+            l_date = parse_date(l_row.get("order_date", ""))
+            if l_date is None or bank_date is None:
+                nearby_ledger.append((str(l_row.get("order_id", "")), float(l_row.get("amount", 0.0))))
+            elif abs((bank_date - l_date).days) <= date_window_days:
+                nearby_ledger.append((str(l_row.get("order_id", "")), float(l_row.get("amount", 0.0))))
+
+        if not nearby_ledger:
+            continue
+
+        # Greedy cumulative-sum search: keep adding orders until sum ≥ bank_amt or within tolerance
+        cumulative_sum = 0.0
+        matched_ids: List[str] = []
+
+        for order_id, amt in nearby_ledger:
+            cumulative_sum += amt
+            matched_ids.append(order_id)
+
+            if cumulative_sum <= 0:
+                continue
+
+            variance = abs(cumulative_sum - bank_amt) / bank_amt
+            if variance <= tolerance_pct and len(matched_ids) >= 2:
+                suspected_aggregates.append({
+                    "bank_utr": bank_utr,
+                    "bank_amount": round(bank_amt, 2),
+                    "bank_date": str(bank_date) if bank_date else "",
+                    "suspected_ledger_ids": list(matched_ids),
+                    "combined_ledger_amount": round(cumulative_sum, 2),
+                    "variance_pct": round(variance * 100, 3),
+                    "recommendation": (
+                        f"Suspected batch aggregate of {len(matched_ids)} orders totalling "
+                        f"₹{cumulative_sum:.2f} (variance {variance * 100:.2f}% from bank credit ₹{bank_amt:.2f}). "
+                        "Manually verify with payment gateway settlement report."
+                    ),
+                })
+                break
+
+            # If we've exceeded bank_amt by more than tolerance, no point continuing
+            if cumulative_sum > bank_amt * (1.0 + tolerance_pct):
+                break
+
+    return suspected_aggregates
+
+
 def _classify_exception(row: pd.Series) -> Optional[BatchException]:
+
     """Classify a reconciliation result row into an exception type, if applicable."""
     status = str(row.get("status", ""))
     rule = str(row.get("matching_rule", ""))

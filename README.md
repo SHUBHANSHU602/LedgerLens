@@ -54,13 +54,13 @@ graph TD
 Manages reconciliation cases through explicit deterministic states: `NEW` → `INGESTING` → `NORMALIZING` → `RECONCILING` → `INVESTIGATING` → `RECOMMENDATION_READY` → `POLICY_APPROVED` → `ACTION_EXECUTING` → `ACTION_VERIFYING` → `RESOLVED`.
 
 ### 2. Exception Investigator (`src/agent/investigator.py`)
-Analyzes transaction exceptions (`FEE_ADJUSTMENT`, `DATE_MISMATCH`, `ONE_TO_ONE_CONFLICT`, `CURRENCY_MISMATCH`) and produces structured, typed recommendations.
+Analyzes transaction exceptions (`FEE_ADJUSTMENT`, `DATE_MISMATCH`, `ONE_TO_ONE_CONFLICT`, `CURRENCY_MISMATCH`, `BATCH_AGGREGATE_SUSPECTED`) and produces structured, typed recommendations.
 
 ### 3. Deterministic Policy Engine (`src/agent/policy.py`)
 Enforces strict financial boundaries:
 - **Fee Adjustment Tolerance**: Auto-adjustment allowed **only** if fee variance $\le ₹100.0$.
 - **Auto-Match Threshold**: Auto-approval allowed **only** if confidence score $\ge 0.82$.
-- **Prompt Injection Defense**: Sanitizes transaction remarks (`[REDACTED_TEXT]`) to prevent malicious text from altering agent rules.
+- **Prompt Injection Defense**: Defense-in-depth sanitization (`sanitize_untrusted_text`) stripping control characters, redacting URLs (`[REDACTED_URL]`), limiting character flooding (`[REDACTED_FLOOD]`), sanitizing jailbreak/override phrases (`[REDACTED_TEXT]`), and truncating untrusted text.
 - **Risk Tiers**: Automatically assigns `LOW`, `MEDIUM`, or `HIGH` risk tiers.
 
 ### 4. Action Handlers & Outcome Verification (`src/agent/actions.py`)
@@ -199,5 +199,5 @@ Exposes structured transaction traces per record for developer audit:
 ---
 
 ## Limitations
-1. **Multi-Legger Aggregates**: Batch payments where 10+ ledger orders are combined into 1 lump-sum bank credit require aggregate subset-sum solvers.
+1. **Multi-Ledger Aggregates**: Payment gateways (e.g. Razorpay) often batch multiple orders into a single net settlement credit. LedgerLens includes a `detect_batch_aggregates()` heuristic detector that identifies candidate order groups within configurable tolerance (default 2%) and date windows (default ±5 days). Full subset-sum optimization for arbitrary 10+ order combinations remains an active area of enhancement.
 2. **Multi-Currency Conversion**: Live FX rate conversion is not included; currency mismatches are safely vetoed to `REVIEW`.

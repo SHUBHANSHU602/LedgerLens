@@ -10,3 +10,5 @@ __pycache__/
 *.tmp
 _throughput_tmp/
 data/_throughput_tmp/
+*.cache.json
+.ledgerlens_cache.json

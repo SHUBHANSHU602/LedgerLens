@@ -71,6 +71,12 @@ class ReconciliationAgent:
         df_results = reconcile(df_ledger, df_bank)
         self.cases.clear()
 
+        # Build bank record lookup keyed by utr_reference for O(1) row retrieval
+        if "utr_reference" in df_bank.columns:
+            bank_lookup: dict = df_bank.set_index("utr_reference").to_dict("index")
+        else:
+            bank_lookup = {}
+
         # 2. INITIALIZE CASES
         for idx, row in df_results.iterrows():
             l_id = str(row.get("ledger_id", ""))
@@ -104,13 +110,40 @@ class ReconciliationAgent:
 
             ledger_row_data = row.to_dict()
 
+            # Populate bank_record with actual bank data (not just the bank_id string)
+            if b_id and b_id in bank_lookup:
+                bank_row_data = dict(bank_lookup[b_id])
+                bank_row_data["utr_reference"] = b_id  # ensure key is present
+            else:
+                bank_row_data = {"utr_reference": b_id, "bank_id": b_id}
+
+            # Populate candidates for REVIEW cases where AI hasn't already processed them.
+            # This activates the ExceptionInvestigator AI re-investigation path.
+            decision_source = str(row.get("decision_source", "deterministic"))
+            if status == "REVIEW" and decision_source != "groq" and b_id and b_id in bank_lookup:
+                # Construct a minimal candidate tuple: (score, b_id, bank_row, breakdown_dict)
+                candidates_for_case = [{
+                    "score": score,
+                    "utr_reference": b_id,
+                    "bank_row": bank_row_data,
+                    "breakdown": {
+                        "ref": float(row.get("original_score", score)),
+                        "amount": 0.0,
+                        "date": 0.0,
+                        "text": 0.0,
+                    },
+                }]
+            else:
+                candidates_for_case = []
+
             case = ReconciliationCase(
                 case_id=case_id,
                 ledger_id=l_id,
                 bank_id=b_id,
                 state=init_state,
                 ledger_record=ledger_row_data,
-                bank_record={"bank_id": b_id},
+                bank_record=bank_row_data,
+                candidates=candidates_for_case,
                 score=score,
                 status=status,
                 exception_type=exc_type,
