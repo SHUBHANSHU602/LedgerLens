@@ -418,3 +418,56 @@ def test_holdout_seed_separation(tmp_path):
     hold_amounts = sorted(df_hold_l["amount"].tolist())
     assert dev_amounts != hold_amounts, "Dev and holdout datasets should differ (different seeds)"
 
+
+def test_groq_rate_limiter_sliding_window():
+    """29. Test GroqRateLimiter tracks sliding window and enforces capacity."""
+    from src.ai_matcher import GroqRateLimiter
+
+    limiter = GroqRateLimiter(max_calls_per_minute=5)
+    limiter.reset()
+
+    # First 5 calls should succeed immediately without sleeping
+    for _ in range(5):
+        slept = limiter.acquire()
+        assert slept == 0.0
+
+    assert len(limiter.timestamps) == 5
+
+    # Test reset
+    limiter.reset()
+    assert len(limiter.timestamps) == 0
+
+    # Test dynamic limit update
+    limiter.update_limit(10)
+    assert limiter.max_calls_per_minute == 10
+
+
+@patch("src.ai_matcher.os.getenv", return_value="mock_groq_api_key")
+@patch("groq.Groq")
+def test_ai_matcher_retries_on_rate_limit(mock_groq_cls, mock_getenv):
+    """30. Test ai_matcher automatically retries when a 429 rate limit is encountered."""
+    from src.ai_matcher import evaluate_ambiguous_record, clear_ai_cache
+    from src.config import ReconciliationConfig
+
+    clear_ai_cache()
+    mock_client = MagicMock()
+    mock_groq_cls.return_value = mock_client
+
+    # First attempt raises 429 Rate Limit error, second attempt succeeds
+    mock_success = MagicMock()
+    mock_success.choices[0].message.content = '{"same_transaction": true, "selected_bank_id": "UTR5001", "reference_evidence": "Match", "amount_consistent": true, "date_consistent": true, "fee_explanation": "None", "reason": "Confirmed"}'
+
+    mock_client.chat.completions.create.side_effect = [
+        Exception("Error code: 429 - Rate limit reached"),
+        mock_success,
+    ]
+
+    fast_config = ReconciliationConfig(GROQ_RETRY_ATTEMPTS=2, GROQ_RETRY_BACKOFF_BASE=0.01)
+    l_row = pd.Series({"order_id": "ORD-5001", "amount": 1000.0, "currency": "INR", "order_date": "2026-08-01"})
+    candidates = [(0.80, "UTR5001", {"credited_amount": 1000.0, "currency": "INR", "value_date": "2026-08-01"}, {})]
+
+    res = evaluate_ambiguous_record(l_row, candidates, config=fast_config)
+    assert res["status"] == "MATCHED"
+    assert res["selected_bank_id"] == "UTR5001"
+    assert mock_client.chat.completions.create.call_count == 2
+

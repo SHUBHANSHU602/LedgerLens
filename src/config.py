@@ -33,6 +33,9 @@ class ReconciliationConfig:
     # Phase 3 Bounded Groq AI Assistance Settings
     GROQ_MODEL: str = "groq/compound"
     ENABLE_AI_ASSIST: bool = True
+    GROQ_MAX_CALLS_PER_MINUTE: int = 25
+    GROQ_RETRY_ATTEMPTS: int = 2
+    GROQ_RETRY_BACKOFF_BASE: float = 0.5
 
     # Custom Data & Debug Mode Configuration
     LEDGERLENS_CUSTOM_DATA_DIR: str = "data/custom"
