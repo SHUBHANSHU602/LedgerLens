@@ -1,6 +1,7 @@
 import os
 import sys
 import io
+import importlib
 import pandas as pd
 import streamlit as st
 
@@ -8,6 +9,9 @@ import streamlit as st
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
+
+import src.config
+importlib.reload(src.config)
 
 from src.config import ReconciliationConfig, CONFIG
 from src.reconciliation import reconcile
@@ -108,19 +112,31 @@ if enable_ai:
 else:
     calls_per_min = 25
 
+os.environ["GROQ_MAX_CALLS_PER_MINUTE"] = str(calls_per_min)
+try:
+    from src.ai_matcher import get_rate_limiter
+    get_rate_limiter().update_limit(int(calls_per_min))
+except Exception:
+    pass
+
 st.sidebar.markdown("---")
 st.sidebar.markdown("**Mode**")
 run_mode = st.sidebar.radio("Evaluation Mode", ["Standard (Live Data)", "Benchmark (Ground Truth)"], index=0)
 is_benchmark_mode = run_mode.startswith("Benchmark")
 
-user_config = ReconciliationConfig(
-    AMOUNT_TOLERANCE=amt_tol,
-    DATE_WINDOW_DAYS=date_win,
-    HIGH_CONFIDENCE_THRESHOLD=high_thresh,
-    REVIEW_THRESHOLD=review_thresh,
-    ENABLE_AI_ASSIST=enable_ai,
-    GROQ_MAX_CALLS_PER_MINUTE=int(calls_per_min),
-)
+# Build user configuration safely to prevent unexpected keyword argument TypeError
+config_kwargs = {
+    "AMOUNT_TOLERANCE": amt_tol,
+    "DATE_WINDOW_DAYS": date_win,
+    "HIGH_CONFIDENCE_THRESHOLD": high_thresh,
+    "REVIEW_THRESHOLD": review_thresh,
+    "ENABLE_AI_ASSIST": enable_ai,
+}
+dataclass_fields = getattr(ReconciliationConfig, "__dataclass_fields__", {})
+if "GROQ_MAX_CALLS_PER_MINUTE" in dataclass_fields:
+    config_kwargs["GROQ_MAX_CALLS_PER_MINUTE"] = int(calls_per_min)
+
+user_config = ReconciliationConfig(**config_kwargs)
 
 # -----------------------------------------------------------------------------
 # 3. Main Header & File Uploaders
