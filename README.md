@@ -5,6 +5,7 @@ LedgerLens is an enterprise-grade financial reconciliation engine combining mult
 ---
 
 ## 📌 Table of Contents
+- [File Architecture](#-file-architecture)
 - [The Problem](#-the-problem)
 - [The Solution: Multi-Tier Bounded Architecture](#-the-solution-multi-tier-bounded-architecture)
 - [Bounded Agent Workflow Loop](#-bounded-agent-workflow-loop)
@@ -18,6 +19,99 @@ LedgerLens is an enterprise-grade financial reconciliation engine combining mult
 - [Streamlit Cloud Deployment](#-streamlit-cloud-deployment)
 - [Developer CLI Commands](#-developer-cli-commands)
 - [Known Limitations](#-known-limitations)
+
+---
+
+## 🗂️ File Architecture
+
+```
+Reconcilliation project/
+│
+├── .env                          # Environment variables (GROQ_API_KEY lives here)
+├── .env.example                  # Template showing all required env vars
+├── .gitignore                    # Git ignore rules
+├── .python-version               # Pinned Python version (pyenv)
+├── requirements.txt              # All Python dependencies
+│
+├── app/                          # ◀ USER-FACING INTERFACES
+│   ├── app.py                    # Streamlit web dashboard (main UI entry point)
+│   └── api.py                    # FastAPI REST endpoints (JSON API server)
+│
+├── api/
+│   └── server.py                 # FastAPI app bootstrap / ASGI entry point
+│
+├── src/                          # ◀ CORE ENGINE
+│   ├── config.py                 # Central config: thresholds, limits, env loading
+│   ├── schemas.py                # Pydantic data models (LedgerEntry, BankEntry, etc.)
+│   ├── normalization.py          # Input cleaning: float parsing, ISO dates, text strip
+│   ├── reconciliation.py         # 🔑 Main engine: Tier 1/2/3 matching + scoring logic
+│   ├── ai_matcher.py             # Groq LLM caller: prompt builder, rate limiter, vetoes
+│   ├── data_generator.py         # Synthetic data factory (12 scenario classes)
+│   ├── data_validation.py        # Schema validation & integrity checks on uploaded CSVs
+│   ├── evaluation.py             # Benchmark evaluator: precision, recall, F1 vs answer key
+│   │
+│   ├── agent/                    # ◀ STATEFUL AGENT WORKFLOW
+│   │   ├── __init__.py           # Package init + public exports
+│   │   ├── models.py             # Agent-specific Pydantic models (WorkflowState, etc.)
+│   │   ├── orchestrator.py       # 🔑 Agent loop: coordinates investigator + policy + actions
+│   │   ├── investigator.py       # Evidence gathering: enriches ambiguous match candidates
+│   │   ├── policy.py             # Rule engine: decides AUTO_APPROVE / ESCALATE / REVIEW
+│   │   └── actions.py            # Action executor: applies decisions, writes audit events
+│   │
+│   ├── connectors/               # ◀ EXTERNAL DATA CONNECTORS
+│   │   ├── __init__.py           # Package init
+│   │   └── razorpay.py           # Razorpay Gateway connector (simulated settlement fetch)
+│   │
+│   └── services/                 # ◀ BUSINESS SERVICES
+│       ├── __init__.py           # Package init
+│       └── finance_controller.py # Finance service: orchestrates end-to-end recon flow
+│
+├── scripts/                      # ◀ DEVELOPER UTILITIES (run directly via `python`)
+│   ├── generate_dataset.py       # Generate synthetic ledger + bank CSV test datasets
+│   ├── run_benchmark.py          # Run offline benchmark vs answer_key.csv, print metrics
+│   ├── run_throughput.py         # Throughput stress test (rows/sec measurement)
+│   ├── audit_dataset.py          # Inspect & summarize a generated dataset
+│   └── audit_repo.py             # Audit project file sizes and structure
+│
+├── tests/                        # ◀ AUTOMATED TEST SUITE (pytest)
+│   ├── test_reconciliation.py    # Unit + integration tests for the core matching engine
+│   ├── test_agent_workflow.py    # Agent orchestrator workflow tests
+│   ├── test_api.py               # FastAPI endpoint integration tests
+│   ├── test_finance_controller.py# Finance service layer tests
+│   └── test_razorpay.py          # Razorpay connector mock tests
+│
+├── data/                         # ◀ DATASETS & OUTPUTS
+│   ├── ledger.csv                # Sample internal sales ledger
+│   ├── bank_statement.csv        # Sample bank statement
+│   ├── answer_key.csv            # Ground-truth match pairs (for benchmark)
+│   ├── reconciliation_dataset.xlsx  # Combined dataset workbook
+│   ├── reconciliation_results.xlsx  # Last reconciliation output workbook
+│   ├── .ledgerlens_cache.json    # LLM response cache (avoids repeat API calls)
+│   ├── demo/                     # Demo-specific CSVs
+│   └── custom/                   # User-uploaded custom datasets
+│
+└── docs/                         # ◀ PROJECT DOCUMENTATION
+    ├── ARCHITECTURE.md           # High-level system architecture overview
+    ├── CODE_MAP.md               # Detailed code map (function-level descriptions)
+    ├── DATA_CONTRACT.md          # CSV schema contracts & field definitions
+    ├── EVALUATION.md             # Evaluation methodology & metrics explanation
+    ├── JUDGE_GUIDE.md            # Hackathon judge quick-start guide
+    ├── THROUGHPUT.md             # Throughput benchmark results
+    └── PHASE*_CHANGELOG.md       # Per-phase development changelogs
+```
+
+### Key Entry Points at a Glance
+
+| What you want to do | File to open |
+|---|---|
+| Launch the web UI | `app/app.py` (run: `streamlit run app/app.py`) |
+| Start the REST API | `api/server.py` (run: `uvicorn api.server:app`) |
+| Understand matching logic | `src/reconciliation.py` |
+| Understand AI escalation | `src/ai_matcher.py` |
+| Understand agent decisions | `src/agent/orchestrator.py` + `policy.py` |
+| Generate test data | `scripts/generate_dataset.py` |
+| Run the benchmark | `scripts/run_benchmark.py` |
+| Run all tests | `pytest tests/` |
 
 ---
 
