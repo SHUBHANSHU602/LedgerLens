@@ -76,12 +76,15 @@ def get_rate_limiter() -> GroqRateLimiter:
 
 
 def get_groq_api_key() -> str:
-    """Retrieve the Groq API key without persisting a Streamlit secret into process-global env."""
+    """Retrieve Groq key from process config, Streamlit session state, or Streamlit secrets."""
     key = os.getenv("GROQ_API_KEY", "").strip()
     if key:
         return key
     try:
         import streamlit as st
+        session_key = str(st.session_state.get("ledgerlens_groq_api_key", "")).strip()
+        if session_key:
+            return session_key
         if hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
             return str(st.secrets["GROQ_API_KEY"]).strip()
     except Exception:
