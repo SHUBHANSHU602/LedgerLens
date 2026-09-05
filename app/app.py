@@ -29,10 +29,35 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    .main-header { font-size: 2.2rem; font-weight: 700; color: #1E293B; margin-bottom: 0.2rem; }
-    .sub-header { font-size: 1.0rem; color: #64748B; margin-bottom: 1.5rem; }
-    .headline-metric { font-size: 1.1rem; font-weight: 600; color: #0F766E; background: #F0FDFA; padding: 10px 16px; border-radius: 8px; border-left: 4px solid #14B8A6; margin: 8px 0; }
-    .stMetric { background-color: #F8FAFC; border-radius: 8px; padding: 12px; border: 1px solid #E2E8F0; }
+    .main-header {
+        font-size: 2.2rem;
+        font-weight: 700;
+        margin-bottom: 0.2rem;
+    }
+    .sub-header {
+        font-size: 1.0rem;
+        opacity: 0.75;
+        margin-bottom: 1.5rem;
+    }
+    .headline-metric {
+        font-size: 1.05rem;
+        font-weight: 600;
+        background: rgba(20, 184, 166, 0.12);
+        border-radius: 8px;
+        border-left: 4px solid #14B8A6;
+        padding: 10px 16px;
+        margin: 10px 0;
+    }
+    div[data-testid="stMetric"], .stMetric {
+        background-color: rgba(128, 128, 128, 0.08) !important;
+        border-radius: 10px !important;
+        padding: 14px 16px !important;
+        border: 1px solid rgba(128, 128, 128, 0.18) !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+    div[data-testid="stMetric"]:hover {
+        border-color: rgba(20, 184, 166, 0.5) !important;
+    }
     </style>
     """,
     unsafe_allow_html=True,
