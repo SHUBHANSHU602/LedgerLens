@@ -1,9 +1,10 @@
 pandas>=2.0.0
-rapidfuzz==3.9.4
-groq==0.13.0
-python-dotenv==1.0.1
-openpyxl==3.1.5
-streamlit==1.36.0
+rapidfuzz>=3.9.0
+groq>=0.11.0
+python-dotenv>=1.0.0
+openpyxl>=3.1.0
+streamlit>=1.36.0
+pillow>=10.4.0
 fastapi>=0.110.0
 uvicorn>=0.30.0
-pytest==8.3.2
+pytest>=8.0.0
